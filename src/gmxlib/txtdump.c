@@ -675,6 +675,8 @@ void pr_inputrec(FILE *fp,int indent,const char *title,t_inputrec *ir,
     PR("userreal2",ir->userreal2);
     PR("userreal3",ir->userreal3);
     PR("userreal4",ir->userreal4);
+    PR("tpizmin",ir->tpizmin);
+    PR("tpizmax",ir->tpizmax);
     pr_grp_opts(fp,indent,"grpopts",&(ir->opts),bMDPformat);
     pr_cosine(fp,indent,"efield-x",&(ir->ex[XX]),bMDPformat);
     pr_cosine(fp,indent,"efield-xt",&(ir->et[XX]),bMDPformat);
