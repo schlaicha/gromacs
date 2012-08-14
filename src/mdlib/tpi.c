@@ -438,7 +438,11 @@ double do_tpi(FILE *fplog,t_commrec *cr,
                     /* Generate a random position in the box */
                     x_init[XX] = gmx_rng_uniform_real(tpi_rand)*state->box[XX][XX];
                     x_init[YY] = gmx_rng_uniform_real(tpi_rand)*state->box[YY][YY];
-                    x_init[ZZ] = gmx_rng_uniform_real(tpi_rand)*state->box[ZZ][ZZ];
+                    /* limit z-coordinate for TPI */
+                    x_init[ZZ] = inputrec->userreal1;
+                    /* original random z-coordinate line
+                    * x_init[ZZ] = gmx_rng_uniform_real(tpi_rand)*state->box[ZZ][ZZ];
+                    */
                 }
                 if (inputrec->nstlist == 1)
                 {
