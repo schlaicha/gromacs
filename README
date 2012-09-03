@@ -1,5 +1,11 @@
 
-               Welcome to the official version of GROMACS!
+               This is not the official version of GROMACS!
+
+               Here I provide some modifications on the Test
+               Particle Insertion code allowing for fixing the
+               test particle in a slab.
+
+                               * * * * *
 
 If you are familiar with unix, it should be fairly trivial to compile and
 install GROMACS. Installation instructions are available in the INSTALL.* 

@@ -1170,6 +1170,20 @@ void get_ir(const char *mdparin,const char *mdparout,
   RTYPE ("userreal2",   ir->userreal2,  0);
   RTYPE ("userreal3",   ir->userreal3,  0);
   RTYPE ("userreal4",   ir->userreal4,  0);
+
+  CTYPE ("TPI Insertion in slab from zmin to zmax, when 0 full box is used");
+  RTYPE ("tpizmin",        ir->tpizmin,    0.0);
+  RTYPE ("tpizmax",        ir->tpizmax,    0.0);
+  if (ir->tpizmin < 0.0) {
+      warning_error(wi,"Minimum z coordinate for insertion must be larger than zero");
+  }
+  if (ir->tpizmax < 0.0) {
+      warning_error(wi,"Maximum z coordinate for insertion must be larger than zero");
+  }
+  if (ir->tpizmax < ir->tpizmin ) {
+      warning_error(wi,"Minimum z coordinate for insertion cannot be larger than maximum");
+  }
+  
 #undef CTYPE
 
   write_inpfile(mdparout,ninp,inp,FALSE,wi);

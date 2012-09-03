@@ -744,6 +744,9 @@ static void do_inputrec(t_fileio *fio, t_inputrec *ir,gmx_bool bRead,
     gmx_fio_do_real(fio,ir->userreal2); 
     gmx_fio_do_real(fio,ir->userreal3); 
     gmx_fio_do_real(fio,ir->userreal4); 
+
+    gmx_fio_do_real(fio,ir->tpizmin); 
+    gmx_fio_do_real(fio,ir->tpizmax); 
     
     /* pull stuff */
     if (file_version >= 48) {

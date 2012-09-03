@@ -269,6 +269,8 @@ typedef struct {
   t_pull *pull;         /* The data for center of mass pulling          */
   real cos_accel;       /* Acceleration for viscosity calculation       */
   tensor deform;        /* Triclinic deformation velocities (nm/ps)     */
+  real tpizmin;         /* Z-min value for test particle insertion     */
+  real tpizmax;         /* Z-max value for test particle insertion     */
   int  userint1;        /* User determined parameters                   */
   int  userint2;
   int  userint3;
