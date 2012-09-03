@@ -308,7 +308,14 @@ double do_tpi(FILE *fplog,t_commrec *cr,
         if ((inputrec->tpizmax > 0)&& (inputrec->tpizmax < state->box[ZZ][ZZ]))
             zmax = inputrec->tpizmax;
         if (zmin > zmax) gmx_fatal(FARGS,"Cannot insert from %f to %f\n",zmin,zmax);
-        else fprintf(stderr, "Test Particle Insertion from zmin: %f to zmax: %f\n",zmin,zmax);
+        else 
+        {
+          fprintf(stderr, "Test Particle Insertion from zmin: %f to zmax: %f\n",zmin,zmax);
+          if (fplog)
+          {
+            fprintf(fplog, "Test Particle Insertion from zmin: %f to zmax: %f\n",zmin,zmax);
+          }
+        }
         /*slab modification end*/
     }
     else
