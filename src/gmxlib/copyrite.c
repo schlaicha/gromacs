@@ -122,15 +122,6 @@ void space(FILE *out, int n)
   fprintf(out,"%*s",n,"");
 }
 
-void f(char *a)
-{
-    int i;
-    int len=strlen(a);
-    
-    for(i=0;i<len;i++)
-        a[i]=~a[i]; 
-}
-
 static void sp_print(FILE *out,const char *s)
 {
   int slen;
@@ -169,7 +160,6 @@ static void pukeit(const char *db,const char *defstring, char *retstring,
     if (strlen(help[*cqnum]) >= STRLEN)
       help[*cqnum][STRLEN-1] = '\0';
     strncpy(retstring,help[*cqnum],retsize);
-    f(retstring);
     for(i=0; (i<nhlp); i++)
       sfree(help[i]);
     sfree(help);
@@ -528,7 +518,12 @@ void please_cite(FILE *fp,const char *key)
       "Optimizing working parameters of the smooth particle mesh Ewald algorithm in terms of accuracy and efficiency",
       "J. Chem. Phys. B",
       133, 2010, "034117"
-    }
+    },
+    { "Sugita1999a",
+      "Y. Sugita, Y. Okamoto",
+      "Replica-exchange molecular dynamics method for protein folding",
+      "Chem. Phys. Lett.",
+      314, 1999, "141-151" },
   };
 #define NSTR (int)asize(citedb)
   

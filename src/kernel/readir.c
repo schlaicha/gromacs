@@ -434,16 +434,17 @@ void check_ir(const char *mdparin,t_inputrec *ir, t_gromppopts *opts,
         sprintf(err_buf,"pressure coupling with PPPM not implemented, use PME");
         CHECK(ir->coulombtype == eelPPPM);
 
-        if (epcPARRINELLORAHMAN == ir->epct && opts->bGenVel)
+        if (epcPARRINELLORAHMAN == ir->epc && opts->bGenVel)
         {
             sprintf(warn_buf,
                     "You are generating velocities so I am assuming you "
                     "are equilibrating a system. You are using "
-                    "Parrinello-Rahman pressure coupling, but this can be "
+                    "%s pressure coupling, but this can be "
                     "unstable for equilibration. If your system crashes, try "
                     "equilibrating first with Berendsen pressure coupling. If "
                     "you are not equilibrating the system, you can probably "
-                    "ignore this warning.");
+                    "ignore this warning.",
+                    epcoupl_names[ir->epc]);
             warning(wi,warn_buf);
         }
     }
@@ -936,7 +937,7 @@ void get_ir(const char *mdparin,const char *mdparout,
   EETYPE("DispCorr",    ir->eDispCorr,  edispc_names);
   CTYPE ("Extension of the potential lookup tables beyond the cut-off");
   RTYPE ("table-extension", ir->tabext, 1.0);
-  CTYPE ("Seperate tables between energy group pairs");
+  CTYPE ("Separate tables between energy group pairs");
   STYPE ("energygrp_table", egptable,   NULL);
   CTYPE ("Spacing for the PME/PPPM FFT grid");
   RTYPE ("fourierspacing", opts->fourierspacing,0.12);

@@ -99,6 +99,7 @@ typedef struct
 {
     int  nr_inputfiles;         /* The number of tpr and mdp input files */
     gmx_large_int_t orig_sim_steps;  /* Number of steps to be done in the real simulation */
+    gmx_large_int_t orig_init_step;  /* Init step for the real simulation */
     real *rcoulomb;             /* The coulomb radii [0...nr_inputfiles] */
     real *rvdw;                 /* The vdW radii */
     real *rlist;                /* Neighbourlist cutoff radius */
@@ -690,6 +691,7 @@ static void launch_simulation(
 
 static void modify_PMEsettings(
         gmx_large_int_t simsteps,  /* Set this value as number of time steps */
+        gmx_large_int_t init_step, /* Set this value as init_step */
         const char *fn_best_tpr,   /* tpr file with the best performance */
         const char *fn_sim_tpr)    /* name of tpr file to be launched */
 {
@@ -701,8 +703,9 @@ static void modify_PMEsettings(
     snew(ir,1);
     read_tpx_state(fn_best_tpr,ir,&state,NULL,&mtop);
         
-    /* Set nsteps to the right value */
+    /* Reset nsteps and init_step to the value of the input .tpr file */
     ir->nsteps = simsteps;
+    ir->init_step = init_step;
     
     /* Write the tpr file which will be launched */
     sprintf(buf, "Writing optimized simulation file %s with nsteps=%s.\n", fn_sim_tpr, gmx_large_int_pfmt);
@@ -988,7 +991,10 @@ static void make_benchmark_tprs(
     /* Reduce the number of steps for the benchmarks */
     info->orig_sim_steps = ir->nsteps;
     ir->nsteps           = benchsteps;
-    
+    /* We must not use init_step from the input tpr file for the benchmarks */
+    info->orig_init_step = ir->init_step;
+    ir->init_step        = 0;
+
     /* For PME-switch potentials, keep the radial distance of the buffer region */
     nlist_buffer   = ir->rlist - ir->rcoulomb;
 
@@ -1530,12 +1536,7 @@ static void do_the_tests(
     if (bResetProblem)
     {
         sep_line(fp);
-        fprintf(fp, "WARNING: The cycle and time step counters could not be reset\n"
-                    "properly. The reason could be that mpirun did not manage to\n"
-                    "export the environment variable GMX_RESET_COUNTER. You might\n"
-                    "have to give a special switch to mpirun for that.\n"
-                    "Alternatively, you can manually set GMX_RESET_COUNTER to the\n"
-                    "value normally provided by -presteps.");
+        fprintf(fp, "WARNING: The cycle and time step counters could not be reset properly. ");
         sep_line(fp);
     }
     sfree(command);
@@ -2507,9 +2508,8 @@ int gmx_tune_pme(int argc,char *argv[])
     else
     {
         simulation_tpr = opt2fn("-so",NFILE,fnm);
-        modify_PMEsettings(bOverwrite? (new_sim_nsteps+cpt_steps) : 
-                           info->orig_sim_steps, tpr_names[best_tpr], 
-                           simulation_tpr);            
+        modify_PMEsettings(bOverwrite? (new_sim_nsteps+cpt_steps) : info->orig_sim_steps,
+                info->orig_init_step, tpr_names[best_tpr], simulation_tpr);
     }
 
     /* Now start the real simulation if the user requested it ... */

@@ -14,7 +14,7 @@ mark_as_advanced(DART_ROOT)
 # machine with no git. 
 #
 # NOTE: when releasing the "-dev" suffix needs to be stripped off!
-set(PROJECT_VERSION "4.5.5-dev")
+set(PROJECT_VERSION "4.5.6-dev")
 set(CUSTOM_VERSION_STRING ""
     CACHE STRING "Custom version string (if empty, use hard-coded default)")
 mark_as_advanced(CUSTOM_VERSION_STRING)
@@ -25,7 +25,7 @@ set(SOVERSION 6)
 # It is a bit irritating, but this has to be set separately for now!
 SET(CPACK_PACKAGE_VERSION_MAJOR "4")
 SET(CPACK_PACKAGE_VERSION_MINOR "5")
-SET(CPACK_PACKAGE_VERSION_PATCH "5")
+SET(CPACK_PACKAGE_VERSION_PATCH "6")
 
 
 # Cmake modules/macros are in a subdirectory to keep this file cleaner
@@ -347,7 +347,6 @@ check_function_exists(fsync             HAVE_FSYNC)
 check_function_exists(_fileno           HAVE__FILENO)
 check_function_exists(fileno            HAVE_FILENO)
 check_function_exists(_commit           HAVE__COMMIT)
-check_function_exists(lstat             HAVE_LSTAT)
 
 include(CheckLibraryExists)
 check_library_exists(m sqrt "" HAVE_LIBM)
@@ -526,7 +525,6 @@ gmx_test_float_format(GMX_FLOAT_FORMAT_IEEE754
 
 include(gmxTestLargeFiles)
 gmx_test_large_files(GMX_LARGEFILES)
-check_function_exists(fseeko     HAVE_FSEEKO)
 
 include(gmxTestSignal)
 gmx_test_retsigtype(RETSIGTYPE)
