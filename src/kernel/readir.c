@@ -504,8 +504,16 @@ void check_ir(const char *mdparin, t_inputrec *ir, t_gromppopts *opts,
     /* TPI STUFF */
     if (EI_TPI(ir->eI))
     {
-        sprintf(err_buf, "TPI only works with pbc = %s", epbc_names[epbcXYZ]);
-        CHECK(ir->ePBC != epbcXYZ);
+        /* we only use uncharge test particles, so it should be safe to use also pbc = xy */
+        //sprintf(err_buf, "TPI only works with pbc = %s", epbc_names[epbcXYZ]);
+        if(ir->ePBC != epbcXYZ)
+        {
+          sprintf(warn_buf, "Using TPI with pbc = %s\n This will make trouble"
+            "with electrostatics (use cut-off for neutral molecules only). Make"
+            "sure you know what you're doing!", epbc_names[epbcXY]);
+          warning(wi, warn_buf);
+        }
+        //CHECK(ir->ePBC != epbcXYZ);
         sprintf(err_buf, "TPI only works with ns = %s", ens_names[ensGRID]);
         CHECK(ir->ns_type != ensGRID);
         sprintf(err_buf, "with TPI nstlist should be larger than zero");

@@ -212,7 +212,7 @@ double do_tpi(FILE *fplog, t_commrec *cr,
        init_em(fplog,TPI,inputrec,&lambda,nrnb,mu_tot,
        state->box,fr,mdatoms,top,cr,nfile,fnm,NULL,NULL);*/
     /* We never need full pbc for TPI */
-    fr->ePBC = epbcXYZ;
+    //fr->ePBC = epbcXYZ;
     /* Determine the temperature for the Boltzmann weighting */
     temp = inputrec->opts.ref_t[0];
     if (fplog)
@@ -335,7 +335,7 @@ double do_tpi(FILE *fplog, t_commrec *cr,
         if (inputrec->tpizmin > 0) {
             zmin = inputrec->tpizmin;
         }
-        if ((inputrec->tpizmax > 0)&& (inputrec->tpizmax < state->box[ZZ][ZZ])) {
+        if ((inputrec->tpizmax > 0)&& (inputrec->tpizmax < state->box[ZZ][ZZ]) || fr->ePBC != epbcXYZ) {
             zmax = inputrec->tpizmax;
         }
         if (zmin > zmax) {
