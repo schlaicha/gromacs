@@ -1392,9 +1392,9 @@ static void make_adress_tf_tables(FILE *fp, const output_env_t oenv,
         j = ir->adress->tf_table_index[i]; /* get energy group index */
         sprintf(buf + strlen(tabfn) - strlen(ftp2ext(efXVG)) - 1, "tf_%s.%s",
                 *(mtop->groups.grpname[mtop->groups.grps[egcENER].nm_ind[j]]), ftp2ext(efXVG));
-        if(fp)
+        if (fp)
         {
-           fprintf(fp,"loading tf table for energygrp index %d from %s\n", ir->adress->tf_table_index[i], buf);
+            fprintf(fp, "loading tf table for energygrp index %d from %s\n", ir->adress->tf_table_index[i], buf);
         }
         fr->atf_tabs[i] = make_atf_table(fp, oenv, fr, buf, box);
     }
@@ -1549,42 +1549,49 @@ const char *lookup_nbnxn_kernel_name(int kernel_type)
     const char *returnvalue = NULL;
     switch (kernel_type)
     {
-        case nbnxnkNotSet: returnvalue     = "not set"; break;
-        case nbnxnk4x4_PlainC: returnvalue = "plain C"; break;
-#ifndef GMX_NBNXN_SIMD
-        case nbnxnk4xN_SIMD_4xN: returnvalue  = "not available"; break;
-        case nbnxnk4xN_SIMD_2xNN: returnvalue = "not available"; break;
-#else
+        case nbnxnkNotSet:
+            returnvalue = "not set";
+            break;
+        case nbnxnk4x4_PlainC:
+            returnvalue = "plain C";
+            break;
+        case nbnxnk4xN_SIMD_4xN:
+        case nbnxnk4xN_SIMD_2xNN:
+#ifdef GMX_NBNXN_SIMD
 #ifdef GMX_X86_SSE2
-#if GMX_NBNXN_SIMD_BITWIDTH == 128
-            /* x86 SIMD intrinsics can be converted to either SSE or AVX depending
-             * on compiler flags. As we use nearly identical intrinsics, using an AVX
-             * compiler flag without an AVX macro effectively results in AVX kernels.
+            /* We have x86 SSE2 compatible SIMD */
+#ifdef GMX_X86_AVX_128_FMA
+            returnvalue = "AVX-128-FMA";
+#else
+#if defined GMX_X86_AVX_256 || defined __AVX__
+            /* x86 SIMD intrinsics can be converted to SSE or AVX depending
+             * on compiler flags. As we use nearly identical intrinsics,
+             * compiling for AVX without an AVX macros effectively results
+             * in AVX kernels.
              * For gcc we check for __AVX__
              * At least a check for icc should be added (if there is a macro)
              */
-#if !(defined GMX_X86_AVX_128_FMA || defined __AVX__)
-#ifndef GMX_X86_SSE4_1
-        case nbnxnk4xN_SIMD_4xN: returnvalue  = "SSE2"; break;
-        case nbnxnk4xN_SIMD_2xNN: returnvalue = "SSE2"; break;
+#if defined GMX_X86_AVX_256 && !defined GMX_NBNXN_HALF_WIDTH_SIMD
+            returnvalue = "AVX-256";
 #else
-        case nbnxnk4xN_SIMD_4xN: returnvalue  = "SSE4.1"; break;
-        case nbnxnk4xN_SIMD_2xNN: returnvalue = "SSE4.1"; break;
+            returnvalue = "AVX-128";
 #endif
 #else
-        case nbnxnk4xN_SIMD_4xN: returnvalue  = "AVX-128"; break;
-        case nbnxnk4xN_SIMD_2xNN: returnvalue = "AVX-128"; break;
+#ifdef GMX_X86_SSE4_1
+            returnvalue  = "SSE4.1";
+#else
+            returnvalue  = "SSE2";
 #endif
 #endif
-#if GMX_NBNXN_SIMD_BITWIDTH == 256
-        case nbnxnk4xN_SIMD_4xN: returnvalue  = "AVX-256"; break;
-        case nbnxnk4xN_SIMD_2xNN: returnvalue = "AVX-256"; break;
 #endif
-#else   /* not GMX_X86_SSE2 */
-        case nbnxnk4xN_SIMD_4xN: returnvalue  = "SIMD"; break;
-        case nbnxnk4xN_SIMD_2xNN: returnvalue = "SIMD"; break;
-#endif
-#endif
+#else /* GMX_X86_SSE2 */
+            /* not GMX_X86_SSE2, but other SIMD */
+            returnvalue  = "SIMD";
+#endif /* GMX_X86_SSE2 */
+#else /* GMX_NBNXN_SIMD */
+            returnvalue = "not available";
+#endif /* GMX_NBNXN_SIMD */
+            break;
         case nbnxnk8x8x8_CUDA: returnvalue   = "CUDA"; break;
         case nbnxnk8x8x8_PlainC: returnvalue = "plain C"; break;
 
@@ -1863,7 +1870,7 @@ void init_interaction_const(FILE                 *fp,
 
     if (fr->nbv != NULL && fr->nbv->bUseGPU)
     {
-        nbnxn_cuda_init_const(fr->nbv->cu_nbv, ic, fr->nbv);
+        nbnxn_cuda_init_const(fr->nbv->cu_nbv, ic, fr->nbv->grp);
     }
 
     bUsesSimpleTables = uses_simple_tables(fr->cutoff_scheme, fr->nbv, -1);
@@ -2051,9 +2058,7 @@ void init_forcerec(FILE              *fp,
          * In mdrun, hwinfo has already been set before calling init_forcerec.
          * Here we ignore GPUs, as tools will not use them anyhow.
          */
-        snew(fr->hwinfo, 1);
-        gmx_detect_hardware(fp, fr->hwinfo, cr,
-                            FALSE, FALSE, NULL);
+        fr->hwinfo = gmx_detect_hardware(fp, cr, FALSE, FALSE, NULL);
     }
 
     /* By default we turn acceleration on, but it might be turned off further down... */
@@ -2213,6 +2218,25 @@ void init_forcerec(FILE              *fp,
     fr->AllvsAll_work   = NULL;
     fr->AllvsAll_workgb = NULL;
 
+    /* All-vs-all kernels have not been implemented in 4.6, and
+     * the SIMD group kernels are also buggy in this case. Non-accelerated
+     * group kernels are OK. See Redmine #1249. */
+    if (fr->bAllvsAll)
+    {
+        fr->bAllvsAll            = FALSE;
+        fr->use_cpu_acceleration = FALSE;
+        if (fp != NULL)
+        {
+            fprintf(fp,
+                    "\nYour simulation settings would have triggered the efficient all-vs-all\n"
+                    "kernels in GROMACS 4.5, but these have not been implemented in GROMACS\n"
+                    "4.6. Also, we can't use the accelerated SIMD kernels here because\n"
+                    "of an unfixed bug. The reference C kernels are correct, though, so\n"
+                    "we are proceeding by disabling all CPU architecture-specific\n"
+                    "(e.g. SSE2/SSE4/AVX) routines. If performance is important, please\n"
+                    "use GROMACS 4.5.7 or try cutoff-scheme = Verlet.\n\n");
+        }
+    }
 
     /* Neighbour searching stuff */
     fr->cutoff_scheme = ir->cutoff_scheme;

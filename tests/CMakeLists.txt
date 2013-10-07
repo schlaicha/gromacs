@@ -43,18 +43,28 @@ if(REGRESSIONTEST_DOWNLOAD AND CMAKE_VERSION VERSION_LESS "2.8.2")
 endif()
 if(REGRESSIONTEST_DOWNLOAD)
     if("${PROJECT_VERSION}" MATCHES "-dev")
-        set(REGRESSIONTEST_VERSION master)
+       if("${PROJECT_VERSION}" MATCHES "^5[.]")
+          set(REGRESSIONTEST_URL http://gerrit.gromacs.org/snapshot/refs/heads/master)
+       else()
+          set(REGRESSIONTEST_URL http://gerrit.gromacs.org/snapshot/refs/heads/release-4-6)
+      endif()
+      set(REGRESSIONTEST_PATH "${CMAKE_CURRENT_BINARY_DIR}/regressiontests"
+           CACHE PATH "Path to auto-downloaded regressiontests" FORCE)
     else()
-        set(REGRESSIONTEST_VERSION ${PROJECT_VERSION})
+        if(NOT REGRESSIONTEST_VERSION)
+          message(FATAL_ERROR "The configuration files do not specify what regressiontests tarball is suitable for automated download and testing. Please obtain and use a suitable set of tests yourself.")
+        endif()
+        set(REGRESSIONTEST_URL http://gerrit.gromacs.org/download/regressiontests-${REGRESSIONTEST_VERSION}.tar.gz)
+        set(REGRESSIONTEST_PATH
+           "${CMAKE_CURRENT_BINARY_DIR}/regressiontests-${REGRESSIONTEST_VERSION}"
+           CACHE PATH "Path to auto-downloaded regressiontests" FORCE)
     endif()
-    set(REGRESSIONTEST_URL
-        http://gerrit.gromacs.org/download/regressiontests-${REGRESSIONTEST_VERSION}.tar.gz)
     set(REGRESSIONTEST_FILE "${CMAKE_CURRENT_BINARY_DIR}/regressiontests.tgz")
     message("Downloading: ${REGRESSIONTEST_URL}")
     file(DOWNLOAD ${REGRESSIONTEST_URL} "${REGRESSIONTEST_FILE}" SHOW_PROGRESS STATUS status LOG log)
     list(GET status 0 status_code)
     list(GET status 1 status_string)
-    
+
     if(NOT status_code EQUAL 0)
         message(FATAL_ERROR "error: downloading '${REGRESSIONTEST_URL}' failed
 status_code: ${status_code}
@@ -62,9 +72,6 @@ status_string: ${status_string}
 log: ${log}")
     endif()
 
-    set(REGRESSIONTEST_PATH
-        "${CMAKE_CURRENT_BINARY_DIR}/regressiontests-${REGRESSIONTEST_VERSION}"
-        CACHE PATH "Path to auto-downloaded regressiontests" FORCE)
     file(REMOVE_RECURSE "${REGRESSIONTEST_PATH}") #delete potential prior folder
     execute_process(COMMAND ${CMAKE_COMMAND} -E tar xf "${REGRESSIONTEST_FILE}"
         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -150,6 +157,6 @@ if(REGRESSIONTEST_PATH)
             #windows requires the command to be perl and not the script
             COMMAND perl "${REGRESSIONTEST_PATH}/gmxtest.pl" ${subtest} ${ARGS})
         set_tests_properties(regressiontests/${subtest} PROPERTIES
-            ENVIRONMENT "PATH=${PATH}")
+            ENVIRONMENT "PATH=${PATH};GMXLIB=${CMAKE_SOURCE_DIR}/share/top")
     endforeach()
 endif()

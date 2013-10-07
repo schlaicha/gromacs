@@ -62,7 +62,7 @@ add_library(gmxana
             gmx_trjconv.c   gmx_trjcat.c    gmx_trjorder.c  gmx_xpm2ps.c    
             gmx_editconf.c  gmx_genbox.c    gmx_genion.c    gmx_genconf.c   
             gmx_genpr.c     gmx_eneconv.c   gmx_vanhove.c   gmx_wheel.c     
-            addconf.c       calcpot.c       edittop.c       gmx_bar.c
+            addconf.c                       edittop.c       gmx_bar.c
             gmx_membed.c    gmx_pme_error.c gmx_options.c   gmx_dos.c
             gmx_hydorder.c  gmx_densorder.c powerspect.c    dens_filter.c
             binsearch.c     gmx_dyecoupl.c  gmx_make_edi.c  gmx_sigeps.c
@@ -70,7 +70,7 @@ add_library(gmxana
             )
 
 
-target_link_libraries(gmxana md gmx ${GSL_LIBRARIES})
+target_link_libraries(gmxana md ${GSL_LIBRARIES})
 set_target_properties(gmxana PROPERTIES OUTPUT_NAME "gmxana${GMX_LIBS_SUFFIX}" SOVERSION ${SOVERSION} INSTALL_NAME_DIR "${LIB_INSTALL_DIR}"
     COMPILE_FLAGS "${OpenMP_C_FLAGS}")
 
@@ -107,7 +107,7 @@ foreach(TOOL ${GMX_TOOLS_PROGRAMS} ${GMX_TOOLS_PROGRAMS_NOT_FOR_INSTALLATION})
         endif()
     endif()
     add_executable(${TOOL} ${TOOL}.c)
-    target_link_libraries(${TOOL} gmxana ${OpenMP_LINKER_FLAGS})
+    target_link_libraries(${TOOL} gmxana md gmx ${OpenMP_LINKER_FLAGS})
     set_target_properties(${TOOL} PROPERTIES OUTPUT_NAME "${TOOL}${GMX_BINARY_SUFFIX}")
 endforeach()
 

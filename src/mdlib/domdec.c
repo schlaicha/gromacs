@@ -2006,7 +2006,7 @@ static void write_dd_grid_pdb(const char *fn, gmx_large_int_t step,
                         cx[ZZ] = grid_r[i*2+z][ZZ];
                         mvmul(tric, cx, r);
                         fprintf(out, format, "ATOM", a++, "CA", "GLY", ' ', 1+i,
-                                10*r[XX], 10*r[YY], 10*r[ZZ], 1.0, vol);
+                                ' ', 10*r[XX], 10*r[YY], 10*r[ZZ], 1.0, vol);
                     }
                 }
             }
@@ -2317,6 +2317,21 @@ static int dd_simnode2pmenode(t_commrec *cr, int sim_nodeid)
     return pmenode;
 }
 
+void get_pme_nnodes(const gmx_domdec_t *dd,
+                    int *npmenodes_x, int *npmenodes_y)
+{
+    if (dd != NULL)
+    {
+        *npmenodes_x = dd->comm->npmenodes_x;
+        *npmenodes_y = dd->comm->npmenodes_y;
+    }
+    else
+    {
+        *npmenodes_x = 1;
+        *npmenodes_y = 1;
+    }
+}
+
 gmx_bool gmx_pmeonlynode(t_commrec *cr, int sim_nodeid)
 {
     gmx_bool bPMEOnlyNode;
@@ -2444,6 +2459,8 @@ static void set_zones_ncg_home(gmx_domdec_t *dd)
     {
         zones->cg_range[i] = dd->ncg_home;
     }
+    /* zone_ncg1[0] should always be equal to ncg_home */
+    dd->comm->zone_ncg1[0] = dd->ncg_home;
 }
 
 static void rebuild_cgindex(gmx_domdec_t *dd,
@@ -2738,10 +2755,18 @@ static real cellsize_min_dlb(gmx_domdec_comm_t *comm, int dim_ind, int dim)
 
     cellsize_min = comm->cellsize_min[dim];
 
-    if (!comm->bVacDLBNoLimit && comm->bPMELoadBalDLBLimits)
+    if (!comm->bVacDLBNoLimit)
     {
-        cellsize_min = max(cellsize_min,
-                           comm->PMELoadBal_max_cutoff/comm->cd[dim_ind].np_dlb);
+        /* The cut-off might have changed, e.g. by PME load balacning,
+         * from the value used to set comm->cellsize_min, so check it.
+         */
+        cellsize_min = max(cellsize_min, comm->cutoff/comm->cd[dim_ind].np_dlb);
+
+        if (comm->bPMELoadBalDLBLimits)
+        {
+            /* Check for the cut-off limit set by the PME load balancing */
+            cellsize_min = max(cellsize_min, comm->PMELoadBal_max_cutoff/comm->cd[dim_ind].np_dlb);
+        }
     }
 
     return cellsize_min;
@@ -9158,7 +9183,7 @@ void dd_partition_system(FILE                *fplog,
     t_block           *cgs_gl;
     gmx_large_int_t    step_pcoupl;
     rvec               cell_ns_x0, cell_ns_x1;
-    int                i, j, n, cg0 = 0, ncg_home_old = -1, ncg_moved, nat_f_novirsum;
+    int                i, j, n, ncgindex_set, ncg_home_old = -1, ncg_moved, nat_f_novirsum;
     gmx_bool           bBoxChanged, bNStGlobalComm, bDoDLB, bCheckDLB, bTurnOnDLB, bLogLoad;
     gmx_bool           bRedist, bSortCG, bResortAll;
     ivec               ncells_old = {0, 0, 0}, ncells_new = {0, 0, 0}, np;
@@ -9293,6 +9318,7 @@ void dd_partition_system(FILE                *fplog,
     {
         /* Clear the old state */
         clear_dd_indices(dd, 0, 0);
+        ncgindex_set = 0;
 
         set_ddbox(dd, bMasterState, cr, ir, state_global->box,
                   TRUE, cgs_gl, state_global->x, &ddbox);
@@ -9317,8 +9343,6 @@ void dd_partition_system(FILE                *fplog,
         inc_nrnb(nrnb, eNR_CGCM, dd->nat_home);
 
         dd_set_cginfo(dd->index_gl, 0, dd->ncg_home, fr, comm->bLocalCG);
-
-        cg0 = 0;
     }
     else if (state_local->ddp_count != dd->ddp_count)
     {
@@ -9338,6 +9362,7 @@ void dd_partition_system(FILE                *fplog,
         /* Build the new indices */
         rebuild_cgindex(dd, cgs_gl->index, state_local);
         make_dd_indices(dd, cgs_gl->index, 0);
+        ncgindex_set = dd->ncg_home;
 
         if (fr->cutoff_scheme == ecutsGROUP)
         {
@@ -9361,6 +9386,7 @@ void dd_partition_system(FILE                *fplog,
 
         /* Clear the non-home indices */
         clear_dd_indices(dd, dd->ncg_home, dd->nat_home);
+        ncgindex_set = 0;
 
         /* Avoid global communication for dim's without pbc and -gcom */
         if (!bNStGlobalComm)
@@ -9406,7 +9432,7 @@ void dd_partition_system(FILE                *fplog,
 
         dd_redistribute_cg(fplog, step, dd, ddbox.tric_dir,
                            state_local, f, fr, mdatoms,
-                           !bSortCG, nrnb, &cg0, &ncg_moved);
+                           !bSortCG, nrnb, &ncgindex_set, &ncg_moved);
 
         wallcycle_sub_stop(wcycle, ewcsDD_REDIST);
     }
@@ -9503,8 +9529,8 @@ void dd_partition_system(FILE                *fplog,
         dd_sort_state(dd, ir->ePBC, fr->cg_cm, fr, state_local,
                       bResortAll ? -1 : ncg_home_old);
         /* Rebuild all the indices */
-        cg0 = 0;
         ga2la_clear(dd->ga2la);
+        ncgindex_set = 0;
 
         wallcycle_sub_stop(wcycle, ewcsDD_GRID);
     }
@@ -9515,7 +9541,7 @@ void dd_partition_system(FILE                *fplog,
     setup_dd_communication(dd, state_local->box, &ddbox, fr, state_local, f);
 
     /* Set the indices */
-    make_dd_indices(dd, cgs_gl->index, cg0);
+    make_dd_indices(dd, cgs_gl->index, ncgindex_set);
 
     /* Set the charge group boundaries for neighbor searching */
     set_cg_boundaries(&comm->zones);
@@ -9650,7 +9676,7 @@ void dd_partition_system(FILE                *fplog,
         make_local_gb(cr, fr->born, ir->gb_algorithm);
     }
 
-    init_bonded_thread_force_reduction(fr, &top_local->idef);
+    setup_bonded_threading(fr, &top_local->idef);
 
     if (!(cr->duty & DUTY_PME))
     {

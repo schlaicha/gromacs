@@ -3,7 +3,7 @@
 % latexmlpost --destination installguide.xhtml --format=xhtml installguide.xml
 %
 % Crude hack to remove ugly symbols:
-% sed -e 's/Â§//g' -i installguide.xhtml
+% sed -e 's/[Â§]//g' -i installguide.xhtml
 %
 % Strip off header for pasting into the website at
 % http://www.gromacs.org/Documentation/Installation_Instructions:
@@ -70,8 +70,8 @@ see the documentation at
 \end{enumerate}
 Or, as a sequence of commands to execute:
 \begin{verbatim}
-tar xfz gromacs-4.6.tar.gz
-cd gromacs-4.6
+tar xfz gromacs-4.6.3.tar.gz
+cd gromacs-4.6.3
 mkdir build
 cd build
 cmake .. -DGMX_BUILD_OWN_FFTW=ON
@@ -148,13 +148,13 @@ capability 2.0 are required, e.g. Fermi or Kepler cards.
 The GPU support from \gromacs{} version 4.5 using \openmm{}
 \url{https://simtk.org/home/openmm} is still contained in the code,
 but in the ``user contributions'' section (\verb+src/contrib+). You
-will need to edit \verb+src/contrib/CMakeLists.txt+ to enable it. It
-also requires \cuda{}, and remains the only hardware-based
-acceleration available for implicit solvent simulations in
-\gromacs{} at the moment. However, the long-term plan is to enable 
-this functionality in core Gromacs, and not have the OpenMM
-interface supported by the \gromacs team. RIght now there might be
-some build issues for OpenMM, but they should be fixed by release 4.6.1.
+will need to set
+\verb+-DGMX_OPENMM=on -DGMX_GPU=off -DGMX_MPI=off
+-DGMX_THREAD_MPI=off\+ in order to build it. It also requires \cuda{},
+and remains the only hardware-based acceleration available for
+implicit solvent simulations in \gromacs{} at the moment. However, the
+long-term plan is to enable this functionality in core Gromacs, and
+not have the OpenMM interface supported by the \gromacs team.
 
 If you wish to run in parallel on multiple machines across a network,
 you will need to have
@@ -237,6 +237,9 @@ recommends either
   build \fftw{} \fftwversion{} from source automatically for you (use
   \verb+cmake -DGMX_BUILD_OWN_FFTW=ON+), or
 \item that you build \fftw{} from the source code.
+Note that the GROMACS-managed download of the FFTW tarball has a
+slight chance of posing a security risk. If you use this option, you
+will see a warning that advises how you can eliminate this risk.
 \end{itemize}
 
 If you build \fftw{} from source yourself, get the most recent version
@@ -255,18 +258,28 @@ support has been compiled into \fftw{}, so you need to set this at compile time.
 
 \subsubsection{\mkl{}}
 
-Using \mkl{} requires a set of linker flags that \gromacs{} is not
-able to detect for you, so setting up optimal linking is tricky at the
-moment. You will need to consult your compiler documentation and
-use \verb+CMAKE_C_FLAGS+ and \verb+-DCMAKE_EXE_LINKER_FLAGS+
-accordingly.
+Using \mkl{} with icc 11 or higher is very simple. Set up your
+compiler environment correctly, perhaps with a command like
+\verb+source /path/to/compilervars.sh intel64+ (or consult your local
+documentation). Then set \verb+-DGMX_FFT_LIBRARY=mkl+ when you run
+\cmake{}. In this case, \gromacs{} will also use \mkl{} for \blas{}
+and \lapack{} (see \hyperref{linear-algebra}{here}).
+
+Otherwise, you can configure \mkl{} by setting
+\verb+-DGMX_FFT_LIBRARY=mkl
+-DMKL_LIBRARIES="/full/path/to/libone.so;/full/path/to/libtwo.so"
+-DMKL_INCLUDE_DIR="/full/path/to/mkl/include"+,
+where the full list (and order!) of libraries you require are found in
+Intel's \mkl{} documentation for your system.
 
 \subsection{Optional build components}
 
 \begin{itemize}
-\item Hardware-optimized \blas{} and \lapack{} libraries are useful for
-  a few of the \gromacs{} utilities focused on normal modes and matrix manipulation, 
-  but they does not provide any benefits for normal simulations.
+\item Hardware-optimized \blas{} and \lapack{} libraries are useful
+  for a few of the \gromacs{} utilities focused on normal modes and
+  matrix manipulation, but they do not provide any benefits for normal
+  simulations. Configuring these are discussed
+  \hyperlink{linear-algebra}{here}.
 \item The built-in \gromacs{} trajectory viewer \verb+ngmx+ requires
   X11 and Motif/Lesstif libraries and header files. Generally, the
   \gromacs{} team rather recommends you use third-party software for
@@ -308,8 +321,8 @@ line is the name of the directory containing the
 example, download the source tarball and use
 % TODO: keep up to date with new releases!
 \begin{verbatim}
-$ tar xfz gromacs-4.6.tgz
-$ cd gromacs-4.6
+$ tar xfz gromacs-4.6.3.tgz
+$ cd gromacs-4.6.3
 $ mkdir build-cmake
 $ cd build-cmake
 $ cmake ..
@@ -423,6 +436,28 @@ and its relatives.
 
 See also: \url{http://cmake.org/Wiki/CMake_Useful_Variables#Environment_Variables}
 
+\subsection{Linear algebra libraries}\hypertarget{linear-algebra}
+As mentioned above, sometimes vendor \blas{} and \lapack{} libraries
+can provide performance enhancements for \gromacs{} when doing
+normal-mode analysis or covariance analysis. For simplicity, the text
+below will refer only to \blas{}, but the same options are available
+for \lapack{}. By default, CMake will search for \blas{}, use it if it
+is found, and otherwise fall back on a version of \blas{} internal to
+\gromacs{}. The \cmake{} option \verb+GMX_EXTERNAL_BLAS+ will be set
+accordingly. The internal versions are fine for normal use. If you
+need to specify a non-standard path to search, use
+\verb+-DCMAKE_PREFIX_PATH=/path/to/search+. If you need to specify a
+library with a non-standard name (e.g. ESSL on AIX), then set
+\verb+-DGMX_BLAS_USER=/path/to/reach/lib/libwhatever.a+.
+
+If you are using Intel's \mkl{} for \fft{}, then the \blas{} and
+\lapack{} it provides are used automatically. This could be
+over-ridden with \verb+GMX_BLAS_USER+, etc.
+
+On Apple platforms where the Accelerate Framework is available, these
+will be automatically used for \blas{} and \lapack{}. This could be
+over-ridden with \verb+GMX_BLAS_USER+, etc.
+
 \subsection{Native GPU acceleration}
 If you have the \cuda{} Software Development Kit installed, you can
 use \cmake{} with:
@@ -470,10 +505,19 @@ single and double precision, and with and without \mpi{}. By default,
 \gromacs{} will suffix binaries and libraries for such builds with
 '\verb+_d+' for double precision and/or '\verb+_mpi+' for \mpi{} (and
 nothing otherwise). This can be controlled manually with
-\verb+GMX_DEFAULT_SUFFIX+, \verb+GMX_BINARY_SUFFIX+ and
-\verb+GMX_LIBRARY_SUFFIX+. This can also be useful for resolving
-libary-naming conflicts with existing packges (\verb+GMX_PREFIX_LIBMD+
-also can be useful).
+\verb+GMX_DEFAULT_SUFFIX (ON/OFF)+, \verb+GMX_BINARY_SUFFIX+ (takes 
+a string) and \verb+GMX_LIBS_SUFFIX+ (also takes a string). 
+This can also be useful for resolving libary-naming conflicts with 
+existing packges (\verb+GMX_PREFIX_LIBMD+ also can be useful).
+For instance, to set a custom suffix for binaries and libraries, 
+one might specify:
+
+\begin{verbatim}
+cmake .. -DGMX_DEFAULT_SUFFIX=OFF -DGMX_BINARY_SUFFIX=_mod -DGMX_LIBS_SUFFIX=_mod
+\end{verbatim}
+
+Thus the names of all binaries and libraries will be appended with
+"\_mod."
 
 \subsection{Building \gromacs{}}
 
@@ -546,7 +590,7 @@ The simplest way to run the checks is to build \gromacs{} with
 \verb+-DREGRESSIONTEST_DOWNLOAD+, and run \verb+make check+.
 \gromacs{} will automatically download and run the tests for you.
 Alternatively, you can download and unpack the tarball yourself from
-\url{http://gerrit.gromacs.org/download/regressiontests-4.6.tar.gz},
+\url{http://gerrit.gromacs.org/download/regressiontests-4.6.1.tar.gz},
 and use the advanced \cmake{} option \verb+REGRESSIONTEST_PATH+ to
 specify the path to the unpacked tarball, which will then be used for
 testing. If this doesn't work, then please read on.
@@ -650,8 +694,7 @@ parallel job execution.
 \subsubsection{BlueGene/P}
 
 There is currently no native acceleration on this platform, but the
-default plain C kernels will work. Toolchain files will be improved in
-\gromacs{} 4.6.1.
+default plain C kernels will work.
 
 \subsubsection{BlueGene/Q}
 
@@ -701,7 +744,7 @@ installation performed for that using the login node's toolchain.
 
 This is the architecture of the K computer, which uses Fujitsu Sparc64viiifx 
 chips. Gromacs-4.6 will build with default C kernels on this architecture,
-and Gromacs-4.6.1 will add accelerated kernels and a custom toolchain.
+and Gromacs-4.6.2 will add accelerated kernels and a custom toolchain.
 
 \section{Tested platforms}
 

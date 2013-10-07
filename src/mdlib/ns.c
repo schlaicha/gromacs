@@ -404,6 +404,17 @@ static inline void new_i_nblist(t_nblist *nlist,
         nlist->gid[nri]      = gid;
         nlist->shift[nri]    = shift;
     }
+    else
+    {
+        /* Adding to previous list. First remove possible previous padding */
+        if(nlist->simd_padding_width>1)
+        {
+            while(nlist->nrj>0 && nlist->jjnr[nlist->nrj-1]<0)
+            {
+                nlist->nrj--;
+            }
+        }
+    }
 }
 
 static inline void close_i_nblist(t_nblist *nlist)
@@ -1282,14 +1293,14 @@ put_in_list_adress(gmx_bool              bHaveVdW[],
                      * processed by the generic AdResS kernel.
                      */
                     if ( (bEnergyGroupCG &&
-                         wf[i_atom] >= 1-GMX_REAL_EPS && wf[jj] >= 1-GMX_REAL_EPS ) ||
-                           ( !bEnergyGroupCG && wf[jj] <= GMX_REAL_EPS ) )
+                          wf[i_atom] >= 1-GMX_REAL_EPS && wf[jj] >= 1-GMX_REAL_EPS ) ||
+                         ( !bEnergyGroupCG && wf[jj] <= GMX_REAL_EPS ) )
                     {
                         continue;
                     }
 
                     b_hybrid = !((wf[i_atom] >= 1-GMX_REAL_EPS && wf[jj] >= 1-GMX_REAL_EPS) ||
-                        (wf[i_atom] <= GMX_REAL_EPS && wf[jj] <= GMX_REAL_EPS));
+                                 (wf[i_atom] <= GMX_REAL_EPS && wf[jj] <= GMX_REAL_EPS));
 
                     if (bNotEx)
                     {
