@@ -66,9 +66,18 @@ int gmx_node_rank(void);
 /* return the rank of the node */
 
 GMX_LIBGMX_EXPORT
+int gmx_physicalnode_id_hash(void);
+/* Return a non-negative hash that is, hopefully, unique for each physical node.
+ * This hash is useful for determining hardware locality.
+ */
+
+GMX_LIBGMX_EXPORT
 int gmx_hostname_num(void);
-/* If the first part of the hostname (up to the first dot) ends with a number, returns this number.
-   If the first part of the hostname does not ends in a number (0-9 characters), returns 0.
+/* Ostensibly, returns a integer characteristic of and unique to each
+   physical node in the MPI system. If the first part of the MPI
+   hostname (up to the first dot) ends with a number, returns this
+   number. If the first part of the MPI hostname does not ends in a
+   number (0-9 characters), returns 0.
  */
 
 GMX_LIBGMX_EXPORT
@@ -85,6 +94,7 @@ gmx_bool gmx_mpi_initialized(void);
  * when GROMACS was compiled without MPI support.
  */
 
+GMX_LIBGMX_EXPORT
 void gmx_barrier(const t_commrec *cr);
 /* Wait till all processes in cr->mpi_comm_mygroup have reached the barrier */
 

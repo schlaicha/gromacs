@@ -73,6 +73,7 @@
 #include "nbnxn_search.h"
 #include "bondf.h"
 #include "gmx_omp_nthreads.h"
+#include "gpu_utils.h"
 
 #ifdef GMX_LIB_MPI
 #include <mpi.h>
@@ -368,8 +369,10 @@ typedef struct gmx_domdec_comm
     /* Stuff for load communication */
     gmx_bool           bRecordLoad;
     gmx_domdec_load_t *load;
+    int                nrank_gpu_shared;
 #ifdef GMX_MPI
     MPI_Comm          *mpi_comm_load;
+    MPI_Comm           mpi_comm_gpu_shared;
 #endif
 
     /* Maximum DLB scaling per load balancing step in percent */
@@ -1551,7 +1554,6 @@ void dd_collect_state(gmx_domdec_t *dd,
         copy_mat(state_local->fvir_prev, state->fvir_prev);
         copy_mat(state_local->pres_prev, state->pres_prev);
 
-
         for (i = 0; i < state_local->ngtc; i++)
         {
             for (j = 0; j < nh; j++)
@@ -1809,6 +1811,34 @@ static void dd_distribute_vec(gmx_domdec_t *dd, t_block *cgs, rvec *v, rvec *lv)
     }
 }
 
+static void dd_distribute_dfhist(gmx_domdec_t *dd, df_history_t *dfhist)
+{
+    int i;
+    dd_bcast(dd, sizeof(int), &dfhist->bEquil);
+    dd_bcast(dd, sizeof(int), &dfhist->nlambda);
+    dd_bcast(dd, sizeof(real), &dfhist->wl_delta);
+
+    if (dfhist->nlambda > 0)
+    {
+        int nlam = dfhist->nlambda;
+        dd_bcast(dd, sizeof(int)*nlam, dfhist->n_at_lam);
+        dd_bcast(dd, sizeof(real)*nlam, dfhist->wl_histo);
+        dd_bcast(dd, sizeof(real)*nlam, dfhist->sum_weights);
+        dd_bcast(dd, sizeof(real)*nlam, dfhist->sum_dg);
+        dd_bcast(dd, sizeof(real)*nlam, dfhist->sum_minvar);
+        dd_bcast(dd, sizeof(real)*nlam, dfhist->sum_variance);
+
+        for (i = 0; i<nlam; i++) {
+            dd_bcast(dd, sizeof(real)*nlam, dfhist->accum_p[i]);
+            dd_bcast(dd, sizeof(real)*nlam, dfhist->accum_m[i]);
+            dd_bcast(dd, sizeof(real)*nlam, dfhist->accum_p2[i]);
+            dd_bcast(dd, sizeof(real)*nlam, dfhist->accum_m2[i]);
+            dd_bcast(dd, sizeof(real)*nlam, dfhist->Tij[i]);
+            dd_bcast(dd, sizeof(real)*nlam, dfhist->Tij_empirical[i]);
+        }
+    }
+}
+
 static void dd_distribute_state(gmx_domdec_t *dd, t_block *cgs,
                                 t_state *state, t_state *state_local,
                                 rvec **f)
@@ -1831,6 +1861,7 @@ static void dd_distribute_state(gmx_domdec_t *dd, t_block *cgs,
         copy_mat(state->boxv, state_local->boxv);
         copy_mat(state->svir_prev, state_local->svir_prev);
         copy_mat(state->fvir_prev, state_local->fvir_prev);
+        copy_df_history(&state_local->dfhist,&state->dfhist);
         for (i = 0; i < state_local->ngtc; i++)
         {
             for (j = 0; j < nh; j++)
@@ -1863,6 +1894,9 @@ static void dd_distribute_state(gmx_domdec_t *dd, t_block *cgs,
     dd_bcast(dd, state_local->ngtc*sizeof(double), state_local->therm_integral);
     dd_bcast(dd, ((state_local->nnhpres*nh)*sizeof(double)), state_local->nhpres_xi);
     dd_bcast(dd, ((state_local->nnhpres*nh)*sizeof(double)), state_local->nhpres_vxi);
+
+    /* communicate df_history -- required for restarting from checkpoint */
+    dd_distribute_dfhist(dd,&state_local->dfhist);
 
     if (dd->nat_home > state_local->nalloc)
     {
@@ -2866,12 +2900,40 @@ static float dd_force_load(gmx_domdec_comm_t *comm)
         if (comm->cycl_n[ddCyclF] > 1)
         {
             /* Subtract the maximum of the last n cycle counts
-             * to get rid of possible high counts due to other soures,
+             * to get rid of possible high counts due to other sources,
              * for instance system activity, that would otherwise
              * affect the dynamic load balancing.
              */
             load -= comm->cycl_max[ddCyclF];
         }
+
+#ifdef GMX_MPI
+        if (comm->cycl_n[ddCyclWaitGPU] && comm->nrank_gpu_shared > 1)
+        {
+            float gpu_wait, gpu_wait_sum;
+
+            gpu_wait = comm->cycl[ddCyclWaitGPU];
+            if (comm->cycl_n[ddCyclF] > 1)
+            {
+                /* We should remove the WaitGPU time of the same MD step
+                 * as the one with the maximum F time, since the F time
+                 * and the wait time are not independent.
+                 * Furthermore, the step for the max F time should be chosen
+                 * the same on all ranks that share the same GPU.
+                 * But to keep the code simple, we remove the average instead.
+                 * The main reason for artificially long times at some steps
+                 * is spurious CPU activity or MPI time, so we don't expect
+                 * that changes in the GPU wait time matter a lot here.
+                 */
+                gpu_wait *= (comm->cycl_n[ddCyclF] - 1)/(float)comm->cycl_n[ddCyclF];
+            }
+            /* Sum the wait times over the ranks that share the same GPU */
+            MPI_Allreduce(&gpu_wait, &gpu_wait_sum, 1, MPI_FLOAT, MPI_SUM,
+                          comm->mpi_comm_gpu_shared);
+            /* Replace the wait time by the average over the ranks */
+            load += -gpu_wait + gpu_wait_sum/comm->nrank_gpu_shared;
+        }
+#endif
     }
 
     return load;
@@ -5614,6 +5676,62 @@ static void make_load_communicator(gmx_domdec_t *dd, int dim_ind, ivec loc)
 }
 #endif
 
+void dd_setup_dlb_resource_sharing(t_commrec *cr,
+                                   const gmx_hw_info_t *hwinfo,
+                                   const gmx_hw_opt_t *hw_opt)
+{
+#ifdef GMX_MPI
+    int           physicalnode_id_hash;
+    int           gpu_id;
+    gmx_domdec_t *dd;
+    MPI_Comm      mpi_comm_pp_physicalnode;
+
+    if (!(cr->duty & DUTY_PP) ||
+        hw_opt->gpu_opt.ncuda_dev_use == 0)
+    {
+        /* Only PP nodes (currently) use GPUs.
+         * If we don't have GPUs, there are no resources to share.
+         */
+        return;
+    }
+
+    physicalnode_id_hash = gmx_physicalnode_id_hash();
+
+    gpu_id = get_gpu_device_id(&hwinfo->gpu_info, &hw_opt->gpu_opt, cr->rank_pp_intranode);
+
+    dd = cr->dd;
+
+    if (debug)
+    {
+        fprintf(debug, "dd_setup_dd_dlb_gpu_sharing:\n");
+        fprintf(debug, "DD PP rank %d physical node hash %d gpu_id %d\n",
+                dd->rank, physicalnode_id_hash, gpu_id);
+    }
+    /* Split the PP communicator over the physical nodes */
+    /* TODO: See if we should store this (before), as it's also used for
+     * for the nodecomm summution.
+     */
+    MPI_Comm_split(dd->mpi_comm_all, physicalnode_id_hash, dd->rank,
+                   &mpi_comm_pp_physicalnode);
+    MPI_Comm_split(mpi_comm_pp_physicalnode, gpu_id, dd->rank,
+                   &dd->comm->mpi_comm_gpu_shared);
+    MPI_Comm_free(&mpi_comm_pp_physicalnode);
+    MPI_Comm_size(dd->comm->mpi_comm_gpu_shared, &dd->comm->nrank_gpu_shared);
+
+    if (debug)
+    {
+        fprintf(debug, "nrank_gpu_shared %d\n", dd->comm->nrank_gpu_shared);
+    }
+
+    /* Note that some ranks could share a GPU, while others don't */
+
+    if (dd->comm->nrank_gpu_shared == 1)
+    {
+        MPI_Comm_free(&dd->comm->mpi_comm_gpu_shared);
+    }
+#endif
+}
+
 static void make_load_communicators(gmx_domdec_t *dd)
 {
 #ifdef GMX_MPI
@@ -6584,6 +6702,9 @@ gmx_domdec_t *init_domain_decomposition(FILE *fplog, t_commrec *cr,
         comm->bRecordLoad = (wallcycle_have_counter() && recload > 0);
 
     }
+
+    /* Initialize to GPU share count to 0, might change later */
+    comm->nrank_gpu_shared = 0;
 
     comm->eDLB = check_dlb_support(fplog, cr, dlb_opt, comm->bRecordLoad, Flags, ir);
 

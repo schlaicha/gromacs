@@ -112,7 +112,7 @@ tMPI_Thread_mutex_t deform_init_box_mutex = TMPI_THREAD_MUTEX_INITIALIZER;
 #ifdef GMX_THREAD_MPI
 struct mdrunner_arglist
 {
-    gmx_hw_opt_t   *hw_opt;
+    gmx_hw_opt_t    hw_opt;
     FILE           *fplog;
     t_commrec      *cr;
     int             nfile;
@@ -170,7 +170,7 @@ static void mdrunner_start_fn(void *arg)
         fplog = mc.fplog;
     }
 
-    mda->ret = mdrunner(mc.hw_opt, fplog, cr, mc.nfile, fnm, mc.oenv,
+    mda->ret = mdrunner(&mc.hw_opt, fplog, cr, mc.nfile, fnm, mc.oenv,
                         mc.bVerbose, mc.bCompact, mc.nstglobalcomm,
                         mc.ddxyz, mc.dd_node_order, mc.rdd,
                         mc.rconstr, mc.dddlb_opt, mc.dlb_scale,
@@ -215,7 +215,8 @@ static t_commrec *mdrunner_start_threads(gmx_hw_opt_t *hw_opt,
     fnmn = dup_tfn(nfile, fnm);
 
     /* fill the data structure to pass as void pointer to thread start fn */
-    mda->hw_opt         = hw_opt;
+    /* hw_opt contains pointers, which should all be NULL at this stage */
+    mda->hw_opt         = *hw_opt;
     mda->fplog          = fplog;
     mda->cr             = cr;
     mda->nfile          = nfile;
@@ -370,14 +371,21 @@ static int get_nthreads_mpi(const gmx_hw_info_t *hwinfo,
         nthreads_tot_max = nthreads_hw;
     }
 
-    bCanUseGPU = (inputrec->cutoff_scheme == ecutsVERLET && hwinfo->bCanUseGPU);
+    bCanUseGPU = (inputrec->cutoff_scheme == ecutsVERLET &&
+                  hwinfo->gpu_info.ncuda_dev_compatible > 0);
     if (bCanUseGPU)
     {
-        ngpu = hwinfo->gpu_info.ncuda_dev_use;
+        ngpu = hwinfo->gpu_info.ncuda_dev_compatible;
     }
     else
     {
         ngpu = 0;
+    }
+
+    if (inputrec->cutoff_scheme == ecutsGROUP)
+    {
+        /* We checked this before, but it doesn't hurt to do it once more */
+        assert(hw_opt->nthreads_omp == 1);
     }
 
     nthreads_tmpi =
@@ -467,9 +475,12 @@ static const char*  NSTLIST_ENVVAR          =  "GMX_NSTLIST";
 /* Try to increase nstlist when using a GPU with nstlist less than this */
 static const int    NSTLIST_GPU_ENOUGH      = 20;
 /* Increase nstlist until the non-bonded cost increases more than this factor */
-static const float  NBNXN_GPU_LIST_OK_FAC   = 1.25;
-/* Don't increase nstlist beyond a non-bonded cost increases of this factor */
-static const float  NBNXN_GPU_LIST_MAX_FAC  = 1.40;
+static const float  NBNXN_GPU_LIST_OK_FAC   = 1.20;
+/* Don't increase nstlist beyond a non-bonded cost increases of this factor.
+ * A standard (protein+)water system at 300K with PME ewald_rtol=1e-5
+ * needs 1.28 at rcoulomb=0.9 and 1.24 at rcoulomb=1.0 to get to nstlist=40.
+ */
+static const float  NBNXN_GPU_LIST_MAX_FAC  = 1.30;
 
 /* Try to increase nstlist when running on a GPU */
 static void increase_nstlist(FILE *fp, t_commrec *cr,
@@ -478,7 +489,8 @@ static void increase_nstlist(FILE *fp, t_commrec *cr,
     char                  *env;
     int                    nstlist_orig, nstlist_prev;
     verletbuf_list_setup_t ls;
-    real                   rlist_inc, rlist_ok, rlist_max, rlist_new, rlist_prev;
+    real                   rlist_nstlist10, rlist_inc, rlist_ok, rlist_max;
+    real                   rlist_new, rlist_prev;
     int                    i;
     t_state                state_tmp;
     gmx_bool               bBox, bDD, bCont;
@@ -489,7 +501,7 @@ static void increase_nstlist(FILE *fp, t_commrec *cr,
     char                   buf[STRLEN];
 
     /* Number of + nstlist alternative values to try when switching  */
-    const int nstl[] = { 20, 25, 40, 50 };
+    const int nstl[] = { 20, 25, 40 };
 #define NNSTL  sizeof(nstl)/sizeof(nstl[0])
 
     env = getenv(NSTLIST_ENVVAR);
@@ -537,10 +549,19 @@ static void increase_nstlist(FILE *fp, t_commrec *cr,
 
     verletbuf_get_list_setup(TRUE, &ls);
 
-    /* Allow rlist to make the list double the size of the cut-off sphere */
+    /* Allow rlist to make the list a given factor larger than the list
+     * would be with nstlist=10.
+     */
+    nstlist_prev = ir->nstlist;
+    ir->nstlist  = 10;
+    calc_verlet_buffer_size(mtop, det(box), ir, ir->verletbuf_drift, &ls,
+                            NULL, &rlist_nstlist10);
+    ir->nstlist  = nstlist_prev;
+
+    /* Determine the pair list size increase due to zero interactions */
     rlist_inc = nbnxn_get_rlist_effective_inc(NBNXN_GPU_CLUSTER_SIZE, mtop->natoms/det(box));
-    rlist_ok  = (max(ir->rvdw, ir->rcoulomb) + rlist_inc)*pow(NBNXN_GPU_LIST_OK_FAC, 1.0/3.0) - rlist_inc;
-    rlist_max = (max(ir->rvdw, ir->rcoulomb) + rlist_inc)*pow(NBNXN_GPU_LIST_MAX_FAC, 1.0/3.0) - rlist_inc;
+    rlist_ok  = (rlist_nstlist10 + rlist_inc)*pow(NBNXN_GPU_LIST_OK_FAC, 1.0/3.0) - rlist_inc;
+    rlist_max = (rlist_nstlist10 + rlist_inc)*pow(NBNXN_GPU_LIST_MAX_FAC, 1.0/3.0) - rlist_inc;
     if (debug)
     {
         fprintf(debug, "GPU nstlist tuning: rlist_inc %.3f rlist_max %.3f\n",
@@ -628,20 +649,13 @@ static void increase_nstlist(FILE *fp, t_commrec *cr,
 }
 
 static void prepare_verlet_scheme(FILE                *fplog,
-                                  const gmx_hw_info_t *hwinfo,
                                   t_commrec           *cr,
                                   const char          *nbpu_opt,
                                   t_inputrec          *ir,
                                   const gmx_mtop_t    *mtop,
                                   matrix               box,
-                                  gmx_bool            *bUseGPU)
+                                  gmx_bool             bUseGPU)
 {
-    /* Here we only check for GPU usage on the MPI master process,
-     * as here we don't know how many GPUs we will use yet.
-     * We check for a GPU on all processes later.
-     */
-    *bUseGPU = hwinfo->bCanUseGPU || (getenv("GMX_EMULATE_GPU") != NULL);
-
     if (ir->verletbuf_drift > 0)
     {
         /* Update the Verlet buffer size for the current run setup */
@@ -652,7 +666,7 @@ static void prepare_verlet_scheme(FILE                *fplog,
          * calc_verlet_buffer_size gives the same results for 4x8 and 4x4
          * and 4x2 gives a larger buffer than 4x4, this is ok.
          */
-        verletbuf_get_list_setup(*bUseGPU, &ls);
+        verletbuf_get_list_setup(bUseGPU, &ls);
 
         calc_verlet_buffer_size(mtop, det(box), ir,
                                 ir->verletbuf_drift, &ls,
@@ -672,7 +686,7 @@ static void prepare_verlet_scheme(FILE                *fplog,
 
     /* With GPU or emulation we should check nstlist for performance */
     if ((EI_DYNAMICS(ir->eI) &&
-         *bUseGPU &&
+         bUseGPU &&
          ir->nstlist < NSTLIST_GPU_ENOUGH) ||
         getenv(NSTLIST_ENVVAR) != NULL)
     {
@@ -758,9 +772,19 @@ static void convert_to_verlet_scheme(FILE *fplog,
     gmx_mtop_remove_chargegroups(mtop);
 }
 
-static void check_and_update_hw_opt(gmx_hw_opt_t *hw_opt,
-                                    int           cutoff_scheme,
-                                    gmx_bool      bIsSimMaster)
+static void print_hw_opt(FILE *fp, const gmx_hw_opt_t *hw_opt)
+{
+    fprintf(fp, "hw_opt: nt %d ntmpi %d ntomp %d ntomp_pme %d gpu_id '%s'\n",
+            hw_opt->nthreads_tot,
+            hw_opt->nthreads_tmpi,
+            hw_opt->nthreads_omp,
+            hw_opt->nthreads_omp_pme,
+            hw_opt->gpu_opt.gpu_id != NULL ? hw_opt->gpu_opt.gpu_id : "");
+}
+
+/* Checks we can do when we don't (yet) know the cut-off scheme */
+static void check_and_update_hw_opt_1(gmx_hw_opt_t *hw_opt,
+                                      gmx_bool      bIsSimMaster)
 {
     gmx_omp_nthreads_read_env(&hw_opt->nthreads_omp, bIsSimMaster);
 
@@ -824,18 +848,6 @@ static void check_and_update_hw_opt(gmx_hw_opt_t *hw_opt,
     }
 #endif
 
-    if (cutoff_scheme == ecutsGROUP)
-    {
-        /* We only have OpenMP support for PME only nodes */
-        if (hw_opt->nthreads_omp > 1)
-        {
-            gmx_fatal(FARGS, "OpenMP threads have been requested with cut-off scheme %s, but these are only supported with cut-off scheme %s",
-                      ecutscheme_names[cutoff_scheme],
-                      ecutscheme_names[ecutsVERLET]);
-        }
-        hw_opt->nthreads_omp = 1;
-    }
-
     if (hw_opt->nthreads_omp_pme > 0 && hw_opt->nthreads_omp <= 0)
     {
         gmx_fatal(FARGS, "You need to specify -ntomp in addition to -ntomp_pme");
@@ -858,15 +870,59 @@ static void check_and_update_hw_opt(gmx_hw_opt_t *hw_opt,
         hw_opt->nthreads_omp_pme = hw_opt->nthreads_omp;
     }
 
+    /* Parse GPU IDs, if provided.
+     * We check consistency with the tMPI thread count later.
+     */
+    gmx_parse_gpu_ids(&hw_opt->gpu_opt);
+
+#ifdef GMX_THREAD_MPI
+    if (hw_opt->gpu_opt.ncuda_dev_use > 0 && hw_opt->nthreads_tmpi == 0)
+    {
+        /* Set the number of MPI threads equal to the number of GPUs */
+        hw_opt->nthreads_tmpi = hw_opt->gpu_opt.ncuda_dev_use;
+
+        if (hw_opt->nthreads_tot > 0 &&
+            hw_opt->nthreads_tmpi > hw_opt->nthreads_tot)
+        {
+            /* We have more GPUs than total threads requested.
+             * We choose to (later) generate a mismatch error,
+             * instead of launching more threads than requested.
+             */
+            hw_opt->nthreads_tmpi = hw_opt->nthreads_tot;
+        }
+    }
+#endif
+
     if (debug)
     {
-        fprintf(debug, "hw_opt: nt %d ntmpi %d ntomp %d ntomp_pme %d gpu_id '%s'\n",
-                hw_opt->nthreads_tot,
-                hw_opt->nthreads_tmpi,
-                hw_opt->nthreads_omp,
-                hw_opt->nthreads_omp_pme,
-                hw_opt->gpu_id != NULL ? hw_opt->gpu_id : "");
+        print_hw_opt(debug, hw_opt);
+    }
+}
 
+/* Checks we can do when we know the cut-off scheme */
+static void check_and_update_hw_opt_2(gmx_hw_opt_t *hw_opt,
+                                      int           cutoff_scheme)
+{
+    if (cutoff_scheme == ecutsGROUP)
+    {
+        /* We only have OpenMP support for PME only nodes */
+        if (hw_opt->nthreads_omp > 1)
+        {
+            gmx_fatal(FARGS, "OpenMP threads have been requested with cut-off scheme %s, but these are only supported with cut-off scheme %s",
+                      ecutscheme_names[cutoff_scheme],
+                      ecutscheme_names[ecutsVERLET]);
+        }
+        hw_opt->nthreads_omp = 1;
+    }
+
+    if (hw_opt->nthreads_omp_pme <= 0 && hw_opt->nthreads_omp > 0)
+    {
+        hw_opt->nthreads_omp_pme = hw_opt->nthreads_omp;
+    }
+
+    if (debug)
+    {
+        print_hw_opt(debug, hw_opt);
     }
 }
 
@@ -904,13 +960,47 @@ static void override_nsteps_cmdline(FILE            *fplog,
     }
 }
 
-/* Data structure set by SIMMASTER which needs to be passed to all nodes
- * before the other nodes have read the tpx file and called gmx_detect_hardware.
+/* Frees GPU memory and destroys the CUDA context.
+ *
+ * Note that this function needs to be called even if GPUs are not used
+ * in this run because the PME ranks have no knowledge of whether GPUs
+ * are used or not, but all ranks need to enter the barrier below.
  */
-typedef struct {
-    int      cutoff_scheme; /* The cutoff scheme from inputrec_t */
-    gmx_bool bUseGPU;       /* Use GPU or GPU emulation          */
-} master_inf_t;
+static void free_gpu_resources(FILE             *fplog,
+                               const t_forcerec *fr,
+                               const t_commrec  *cr)
+{
+    gmx_bool bIsPPrankUsingGPU;
+    char     gpu_err_str[STRLEN];
+
+    bIsPPrankUsingGPU = (cr->duty & DUTY_PP) && fr->nbv != NULL && fr->nbv->bUseGPU;
+
+    if (bIsPPrankUsingGPU)
+    {
+        /* free nbnxn data in GPU memory */
+        nbnxn_cuda_free(fplog, fr->nbv->cu_nbv);
+
+        /* With tMPI we need to wait for all ranks to finish deallocation before
+         * destroying the context in free_gpu() as some ranks may be sharing
+         * GPU and context.
+         * Note: as only PP ranks need to free GPU resources, so it is safe to
+         * not call the barrier on PME ranks.
+         */
+#ifdef GMX_THREAD_MPI
+        if (PAR(cr))
+        {
+            gmx_barrier(cr);
+        }
+#endif /* GMX_THREAD_MPI */
+
+        /* uninitialize GPU (by destroying the context) */
+        if (!free_gpu(gpu_err_str))
+        {
+            gmx_warning("On node %d failed to free GPU #%d: %s",
+                        cr->nodeid, get_current_gpu_device_id(), gpu_err_str);
+        }
+    }
+}
 
 int mdrunner(gmx_hw_opt_t *hw_opt,
              FILE *fplog, t_commrec *cr, int nfile,
@@ -956,7 +1046,8 @@ int mdrunner(gmx_hw_opt_t *hw_opt,
     int             nthreads_pp  = 1;
     gmx_membed_t    membed       = NULL;
     gmx_hw_info_t  *hwinfo       = NULL;
-    master_inf_t    minf         = {-1, FALSE};
+    /* The master rank decides early on bUseGPU and broadcasts this later */
+    gmx_bool        bUseGPU      = FALSE;
 
     /* CAUTION: threads may be started later on in this function, so
        cr doesn't reflect the final parallel state right now */
@@ -973,8 +1064,7 @@ int mdrunner(gmx_hw_opt_t *hw_opt,
 
     /* Detect hardware, gather information. This is an operation that is
      * global for this process (MPI rank). */
-    hwinfo = gmx_detect_hardware(fplog, cr,
-                                 bForceUseGPU, bTryUseGPU, hw_opt->gpu_id);
+    hwinfo = gmx_detect_hardware(fplog, cr, bTryUseGPU);
 
 
     snew(state, 1);
@@ -989,17 +1079,17 @@ int mdrunner(gmx_hw_opt_t *hw_opt,
             convert_to_verlet_scheme(fplog, inputrec, mtop, det(state->box));
         }
 
-
-        minf.cutoff_scheme = inputrec->cutoff_scheme;
-        minf.bUseGPU       = FALSE;
-
         if (inputrec->cutoff_scheme == ecutsVERLET)
         {
-            prepare_verlet_scheme(fplog, hwinfo, cr, nbpu_opt,
-                                  inputrec, mtop, state->box,
-                                  &minf.bUseGPU);
+            /* Here the master rank decides if all ranks will use GPUs */
+            bUseGPU = (hwinfo->gpu_info.ncuda_dev_compatible > 0 ||
+                       getenv("GMX_EMULATE_GPU") != NULL);
+
+            prepare_verlet_scheme(fplog, cr,
+                                  nbpu_opt, inputrec, mtop, state->box,
+                                  bUseGPU);
         }
-        else if (hwinfo->bCanUseGPU)
+        else if (hwinfo->gpu_info.ncuda_dev_compatible > 0)
         {
             md_print_warn(cr, fplog,
                           "NOTE: GPU(s) found, but the current simulation can not use GPUs\n"
@@ -1011,17 +1101,15 @@ int mdrunner(gmx_hw_opt_t *hw_opt,
                 gmx_fatal(FARGS, "GPU requested, but can't be used without cutoff-scheme=Verlet");
             }
         }
-    }
-#ifndef GMX_THREAD_MPI
-    if (PAR(cr))
-    {
-        gmx_bcast_sim(sizeof(minf), &minf, cr);
-    }
+#ifdef GMX_TARGET_BGQ
+        else
+        {
+            md_print_warn(cr, fplog,
+                          "NOTE: There is no SIMD implementation of the group scheme kernels on\n"
+                          "      BlueGene/Q. You will observe better performance from using the\n"
+                          "      Verlet cut-off scheme.\n");
+        }
 #endif
-    if (minf.bUseGPU && cr->npmenodes == -1)
-    {
-        /* Don't automatically use PME-only nodes with GPUs */
-        cr->npmenodes = 0;
     }
 
     /* Check for externally set OpenMP affinity and turn off internal
@@ -1031,18 +1119,18 @@ int mdrunner(gmx_hw_opt_t *hw_opt,
      */
     gmx_omp_check_thread_affinity(fplog, cr, hw_opt);
 
-#ifdef GMX_THREAD_MPI
-    /* With thread-MPI inputrec is only set here on the master thread */
-    if (SIMMASTER(cr))
-#endif
-    {
-        check_and_update_hw_opt(hw_opt, minf.cutoff_scheme, SIMMASTER(cr));
+    /* Check and update the hardware options for internal consistency */
+    check_and_update_hw_opt_1(hw_opt, SIMMASTER(cr));
 
+    if (SIMMASTER(cr))
+    {
 #ifdef GMX_THREAD_MPI
-        /* Early check for externally set process affinity. Can't do over all
-         * MPI processes because hwinfo is not available everywhere, but with
-         * thread-MPI it's needed as pinning might get turned off which needs
-         * to be known before starting thread-MPI. */
+        /* Early check for externally set process affinity.
+         * With thread-MPI this is needed as pinning might get turned off,
+         * which needs to be known before starting thread-MPI.
+         * With thread-MPI hw_opt is processed here on the master rank
+         * and passed to the other ranks later, so we only do this on master.
+         */
         gmx_check_thread_affinity_set(fplog,
                                       NULL,
                                       hw_opt, hwinfo->nthreads_hw_avail, FALSE);
@@ -1065,6 +1153,12 @@ int mdrunner(gmx_hw_opt_t *hw_opt,
 #ifdef GMX_THREAD_MPI
     if (SIMMASTER(cr))
     {
+        /* Since the master knows the cut-off scheme, update hw_opt for this.
+         * This is done later for normal MPI and also once more with tMPI
+         * for all tMPI ranks.
+         */
+        check_and_update_hw_opt_2(hw_opt, inputrec->cutoff_scheme);
+
         /* NOW the threads will be started: */
         hw_opt->nthreads_tmpi = get_nthreads_mpi(hwinfo,
                                                  hw_opt,
@@ -1357,6 +1451,9 @@ int mdrunner(gmx_hw_opt_t *hw_opt,
     fflush(stderr);
 #endif
 
+    /* Check and update hw_opt for the cut-off scheme */
+    check_and_update_hw_opt_2(hw_opt, inputrec->cutoff_scheme);
+
     gmx_omp_nthreads_init(fplog, cr,
                           hwinfo->nthreads_hw_avail,
                           hw_opt->nthreads_omp,
@@ -1364,9 +1461,40 @@ int mdrunner(gmx_hw_opt_t *hw_opt,
                           (cr->duty & DUTY_PP) == 0,
                           inputrec->cutoff_scheme == ecutsVERLET);
 
-    /* check consistency and decide on the number of gpus to use. */
-    gmx_check_hw_runconf_consistency(fplog, hwinfo, cr, hw_opt->nthreads_tmpi,
-                                     minf.bUseGPU);
+    if (PAR(cr))
+    {
+        /* The master rank decided on the use of GPUs,
+         * broadcast this information to all ranks.
+         */
+        gmx_bcast_sim(sizeof(bUseGPU), &bUseGPU, cr);
+    }
+
+    if (bUseGPU)
+    {
+        if (cr->npmenodes == -1)
+        {
+            /* Don't automatically use PME-only nodes with GPUs */
+            cr->npmenodes = 0;
+        }
+
+        /* Select GPU id's to use */
+        gmx_select_gpu_ids(fplog, cr, &hwinfo->gpu_info, bForceUseGPU,
+                           &hw_opt->gpu_opt);
+    }
+    else
+    {
+        /* Ignore (potentially) manually selected GPUs */
+        hw_opt->gpu_opt.ncuda_dev_use = 0;
+    }
+
+    /* check consistency of CPU acceleration and number of GPUs selected */
+    gmx_check_hw_runconf_consistency(fplog, hwinfo, cr, hw_opt, bUseGPU);
+
+    if (DOMAINDECOMP(cr))
+    {
+        /* When we share GPUs over ranks, we need to know this for the DLB */
+        dd_setup_dlb_resource_sharing(cr, hwinfo, hw_opt);
+    }
 
     /* getting number of PP/PME threads
        PME: env variable should be read only on one node to make sure it is
@@ -1408,8 +1536,9 @@ int mdrunner(gmx_hw_opt_t *hw_opt,
         }
 
         /* Initiate forcerecord */
-        fr         = mk_forcerec();
-        fr->hwinfo = hwinfo;
+        fr          = mk_forcerec();
+        fr->hwinfo  = hwinfo;
+        fr->gpu_opt = &hw_opt->gpu_opt;
         init_forcerec(fplog, oenv, fr, fcd, inputrec, mtop, cr, box, FALSE,
                       opt2fn("-table", nfile, fnm),
                       opt2fn("-tabletf", nfile, fnm),
@@ -1627,19 +1756,9 @@ int mdrunner(gmx_hw_opt_t *hw_opt,
                nthreads_pp,
                EI_DYNAMICS(inputrec->eI) && !MULTISIM(cr));
 
-    if ((cr->duty & DUTY_PP) && fr->nbv != NULL && fr->nbv->bUseGPU)
-    {
-        char gpu_err_str[STRLEN];
 
-        /* free GPU memory and uninitialize GPU (by destroying the context) */
-        nbnxn_cuda_free(fplog, fr->nbv->cu_nbv);
-
-        if (!free_gpu(gpu_err_str))
-        {
-            gmx_warning("On node %d failed to free GPU #%d: %s",
-                        cr->nodeid, get_current_gpu_device_id(), gpu_err_str);
-        }
-    }
+    /* Free GPU memory and context */
+    free_gpu_resources(fplog, fr, cr);
 
     if (opt2bSet("-membed", nfile, fnm))
     {

@@ -93,22 +93,6 @@ enum {
     ddnoSEL, ddnoINTERLEAVE, ddnoPP_PME, ddnoCARTESIAN, ddnoNR
 };
 
-/* The options for the thread affinity setting, default: auto */
-enum {
-    threadaffSEL, threadaffAUTO, threadaffON, threadaffOFF, threadaffNR
-};
-
-typedef struct {
-    int      nthreads_tot;        /* Total number of threads requested (TMPI) */
-    int      nthreads_tmpi;       /* Number of TMPI threads requested         */
-    int      nthreads_omp;        /* Number of OpenMP threads requested       */
-    int      nthreads_omp_pme;    /* As nthreads_omp, but for PME only nodes  */
-    int      thread_affinity;     /* Thread affinity switch, see enum above   */
-    int      core_pinning_stride; /* Logical core pinning stride              */
-    int      core_pinning_offset; /* Logical core pinning offset              */
-    char    *gpu_id;              /* GPU id's to use, each specified as chars */
-} gmx_hw_opt_t;
-
 /* Variables for temporary use with the deform option,
  * used in runner.c and md.c.
  * (These variables should be stored in the tpx file.)
@@ -178,14 +162,17 @@ gmx_integrator_t do_tpi;
 void init_npt_masses(t_inputrec *ir, t_state *state, t_extmass *MassQ, gmx_bool bInit);
 
 GMX_LIBMD_EXPORT
+void init_expanded_ensemble(gmx_bool bStateFromCP, t_inputrec *ir, gmx_rng_t *mcrng, df_history_t *dfhist);
+
+GMX_LIBMD_EXPORT
 int ExpandedEnsembleDynamics(FILE *log, t_inputrec *ir, gmx_enerdata_t *enerd,
-                             t_state *state, t_extmass *MassQ, df_history_t *dfhist,
+                             t_state *state, t_extmass *MassQ, int fep_state, df_history_t *dfhist,
                              gmx_large_int_t step, gmx_rng_t mcrng,
                              rvec *v, t_mdatoms *mdatoms);
 
 GMX_LIBMD_EXPORT
 void PrintFreeEnergyInfoToFile(FILE *outfile, t_lambda *fep, t_expanded *expand, t_simtemp *simtemp, df_history_t *dfhist,
-                               int nlam, int frequency, gmx_large_int_t step);
+                               int fep_state, int frequency, gmx_large_int_t step);
 
 GMX_LIBMD_EXPORT
 void get_mc_state(gmx_rng_t rng, t_state *state);
