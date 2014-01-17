@@ -376,7 +376,7 @@ void get_pullgrp_distance(t_pull *pull, t_pbc *pbc, int g, double t,
     {
         for (m = 0; m < DIM; m++)
         {
-            ref[m] = pgrp->init[m] + pgrp->rate*t*pgrp->vec[m];
+            ref[m] = pgrp->init[m] + pgrp->rate*t*pgrp->vec[m]; // ALEX: add time dependent term here
         }
     }
     else
