@@ -56,12 +56,12 @@ mark_as_advanced(DART_ROOT)
 # machine with no git. 
 #
 # NOTE: when releasing the "-dev" suffix needs to be stripped off!
-set(PROJECT_VERSION "4.6.4-dev")
+set(PROJECT_VERSION "4.6.6-dev")
 # The version number of the regressiontest tarball against which this
 # git branch can be tested. Normally, this will be the version of the
 # last patch release. Comment the next line out for branches leading
 # to a major/minor release.
-set(REGRESSIONTEST_VERSION "4.6.2")
+set(REGRESSIONTEST_VERSION "4.6.5")
 set(CUSTOM_VERSION_STRING ""
     CACHE STRING "Custom version string (if empty, use hard-coded default)")
 mark_as_advanced(CUSTOM_VERSION_STRING)
@@ -1054,6 +1054,16 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "BlueGene")
         message(FATAL_ERROR "Could not link to the SIMD version of the IBM MASS library. Please adjust your CMAKE_PREFIX_PATH to contain it")
     endif()
 endif()
+
+
+option(GMX_NACL "Configure for Native Client builds" OFF)
+if (GMX_NACL)
+  list(APPEND GMX_EXTRA_LIBRARIES nosys)
+  set(GMX_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -lnosys")
+  set(GMX_NO_NICE 1)
+  set(GMX_NO_RENAME 1)
+endif()
+mark_as_advanced(GMX_NACL)
 
 if(GMX_FAHCORE)
   set(COREWRAP_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/../corewrap" CACHE STRING 

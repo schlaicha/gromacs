@@ -67,6 +67,7 @@
 #include "smalloc.h"
 #include "gmx_fatal.h"
 #include "macros.h"
+#include "main.h"
 #include "string2.h"
 #include "futil.h"
 
@@ -243,7 +244,7 @@ void nice_header (FILE *out, const char *fn)
 #ifdef HAVE_PWD_H
     uid  = getuid();
     pw   = getpwuid(uid);
-    gh   = gethostname(buf, 255);
+    gh   = gmx_gethostname(buf, 255);
     /* pw returns null on error (e.g. compute nodes lack /etc/passwd) */
     user = pw ? pw->pw_name : unk;
 #else
@@ -389,6 +390,18 @@ gmx_strndup(const char *src, int n)
 const unsigned int
     gmx_string_hash_init = 5381;
 
+
+unsigned int
+gmx_string_fullhash_func(const char *s, unsigned int hash_init)
+{
+    int c;
+
+    while ((c = (*s++)) != '\0')
+    {
+        hash_init = ((hash_init << 5) + hash_init) ^ c; /* (hash * 33) xor c */
+    }
+    return hash_init;
+}
 
 unsigned int
 gmx_string_hash_func(const char *s, unsigned int hash_init)
