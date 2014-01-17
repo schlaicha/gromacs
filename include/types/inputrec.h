@@ -115,6 +115,7 @@ typedef struct {
     rvec        vec;        /* The pull vector, direction or position */
     rvec        init;       /* Initial reference displacement */
     real        rate;       /* Rate of motion (nm/ps) */
+    real        freq;       /* Frequency for time dependent pulling */
     real        k;          /* force constant */
     real        kB;         /* force constant for state B */
     real        wscale;     /* scaling factor for the weights: sum w m/sum w w m */
