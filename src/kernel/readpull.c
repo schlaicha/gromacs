@@ -202,6 +202,8 @@ char **read_pullparams(int *ninp_p, t_inpfile **inp_p,
             RTYPE(buf,              pgrp->k, 0.0);
             sprintf(buf, "pull_kB%d", i);
             RTYPE(buf,              pgrp->kB, pgrp->k);
+            sprintf(buf, "pull_freq%d", i);
+            RTYPE(buf,              pgrp->freq, 0.0);
         }
 
         /* Initialize the pull group */

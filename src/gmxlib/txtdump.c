@@ -562,6 +562,7 @@ static void pr_pullgrp(FILE *fp, int indent, int g, t_pullgrp *pg)
     PR("rate", pg->rate);
     PR("k", pg->k);
     PR("kB", pg->kB);
+    PR("pullfreq", pg->freq);
 }
 
 static void pr_simtempvals(FILE *fp, int indent, t_simtemp *simtemp, int n_lambda, gmx_bool bMDPformat)

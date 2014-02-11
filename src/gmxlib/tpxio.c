@@ -267,6 +267,8 @@ static void do_pullgrp(t_fileio *fio, t_pullgrp *pgrp, gmx_bool bRead,
     {
         pgrp->kB = pgrp->k;
     }
+    /* frequency dependent pulling */
+    gmx_fio_do_real(fio,pgrp->freq);
 }
 
 static void do_expandedvals(t_fileio *fio, t_expanded *expand, t_lambda *fepvals, gmx_bool bRead, int file_version)
@@ -577,6 +579,7 @@ static void do_pull(t_fileio *fio, t_pull *pull, gmx_bool bRead, int file_versio
     gmx_fio_do_real(fio, pull->constr_tol);
     gmx_fio_do_int(fio, pull->nstxout);
     gmx_fio_do_int(fio, pull->nstfout);
+    
     if (bRead)
     {
         snew(pull->grp, pull->ngrp+1);
@@ -1569,11 +1572,6 @@ static void do_inputrec(t_fileio *fio, t_inputrec *ir, gmx_bool bRead,
             bDum = gmx_fio_ndo_gmx_bool(fio, ir->opts.bTS, ir->opts.ngQM);
         }
         /* end of QMMM stuff */
-        /* frequency dependent pulling */
-        if(file_version >= 84 )
-        {
-          gmx_fio_do_real(fio,ir->freq);
-        }
     }
 }
 
