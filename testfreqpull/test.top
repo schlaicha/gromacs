@@ -1,0 +1,9 @@
+#include "ffG53a6.itp"
+#include "test.itp"
+
+[ system ]
+test
+
+[molecules]
+TS1              1
+TS2              1

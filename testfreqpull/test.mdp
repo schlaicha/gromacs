@@ -1,0 +1,70 @@
+; Running
+integrator               = md
+nsteps                   = 20000
+dt                       = 0.002
+
+
+; Output options
+; ===================================================================
+comm_mode = none; Linear: Remove center of mass translation
+comm_grps = system; group(s) for center of mass motion removal, default is the whole system
+nstxout                  = 0
+nstvout                  = 0
+nstfout                  = 0
+nstxtcout                = 100; frequency to write coordinates to xtc trajectory 
+nstlog                   = 100
+nstenergy                = 100
+
+; Constraints
+; ===================================================================
+constraints              = hbonds; standard spc/e: 3 lengths -> also angle fixed
+
+; neighbor searching
+; ===================================================================
+;cutoff-scheme = verlet; use new Verlet cut-off scheme
+ns_type                  = grid
+nstlist                  = 10; no influence on accurracy?
+
+rcoulomb  = 0.9; distance for the Coulomb cut-off
+rlist     = 0.9; cut-off distance for the short-range neighbor list - with Verlet ignored!
+rvdw      = 0.9; distance for the LJ or Buckingham cut-off
+
+; Electrostatics
+; ===================================================================
+coulombtype     = cutoff
+fourierspacing  = 0.1; This should give an accuracy of about 2-3*10^-4
+pme-order       = 4;
+
+; VdW
+; ===================================================================
+vdw-type      = Cut-off
+vdw-modifier  = None
+DispCorr      = no
+
+; group(s) to write to energy file 
+energygrps               = system
+
+;gen-vel = yes
+
+;tcoupl                   = v-rescale
+;tc_grps                  = system
+;tau_t                    = .5 
+;ref_t                    = 300
+
+; Pull code
+pull            = umbrella
+pull_geometry   =direction-periodic
+pull_vec1       = 1 0 0
+pull-dim        = Y N N
+pull_start      = yes           ; define initial COM distance > 0
+pull_ngroups    = 1
+pull_group0     = ref
+pull_group1     = move
+pull_rate1      = 0.1          ; 0.01 nm per ps = 10 nm per ns
+pull_k1         = 1000          ; kJ mol^-1 nm^-2
+pull-nstxout    = 100
+pull-nstfout    = 100
+pull_freq1       = 1
+
+;freezegrps = ref
+;freezedim = 1 1 1

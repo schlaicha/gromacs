@@ -1,0 +1,15 @@
+[ moleculetype ]
+; Name nrexcl
+TS1     0 
+
+[ atoms ]
+;   nr      type  resnr resid  atom  cgnr   charge     mass
+1       DUM     1  TST       D     1    0.000   1e12
+
+[ moleculetype ]
+; Name nrexcl
+TS2     0 
+
+[ atoms ]
+;   nr      type  resnr resid  atom  cgnr   charge     mass
+     1       DUM     1  TST       D     1    0.000   1e1
