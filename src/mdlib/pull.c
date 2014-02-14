@@ -63,6 +63,8 @@
 #include "gmx_ga2la.h"
 #include "copyrite.h"
 
+#define PI 3.14159265
+
 static void pull_print_x_grp(FILE *out, gmx_bool bRef, ivec dim, t_pullgrp *pgrp)
 {
     int m;
@@ -313,7 +315,9 @@ static void get_pullgrps_dr(const t_pull *pull, const t_pbc *pbc, int g, double 
     {
         for (m = 0; m < DIM; m++)
         {
+            // * cos(2.*PI*pgrp->freq*t); // ALEX: add time dependent term here
             dref[m] = (pgrp->init[0] + pgrp->rate*t)*pull->grp[g].vec[m];
+            fprintf(stderr, "HELLO\n");
         }
         /* Add the reference position, so we use the correct periodic image */
         dvec_inc(xrefr, dref);
@@ -376,7 +380,7 @@ void get_pullgrp_distance(t_pull *pull, t_pbc *pbc, int g, double t,
     {
         for (m = 0; m < DIM; m++)
         {
-            ref[m] = pgrp->init[m] + pgrp->rate*t*pgrp->vec[m]; // ALEX: add time dependent term here
+            ref[m] = pgrp->init[m] + pgrp->rate*(fmod(t,(1./pgrp->freq)))*pgrp->vec[m];
         }
     }
     else
