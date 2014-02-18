@@ -315,9 +315,14 @@ static void get_pullgrps_dr(const t_pull *pull, const t_pbc *pbc, int g, double 
     {
         for (m = 0; m < DIM; m++)
         {
-            // * cos(2.*PI*pgrp->freq*t); // ALEX: add time dependent term here
-            dref[m] = (pgrp->init[0] + pgrp->rate*t)*pull->grp[g].vec[m];
-            fprintf(stderr, "HELLO\n");
+            if (pgrp->freq == 0)
+            {
+              dref[m] = (pgrp->init[0] + pgrp->rate*t)*pull->grp[g].vec[m];
+            }
+            else
+            {
+              dref[m] = (pgrp->init[0] + pgrp->rate * sin(2.*PI*pgrp->freq*t)) * pull->grp[g].vec[m];
+            }
         }
         /* Add the reference position, so we use the correct periodic image */
         dvec_inc(xrefr, dref);
@@ -380,12 +385,20 @@ void get_pullgrp_distance(t_pull *pull, t_pbc *pbc, int g, double t,
     {
         for (m = 0; m < DIM; m++)
         {
-            ref[m] = pgrp->init[m] + pgrp->rate*(fmod(t,(1./pgrp->freq)))*pgrp->vec[m];
+            ref[m] = pgrp->init[m] + pgrp->rate*t*pgrp->vec[m];
         }
     }
     else
     {
-        ref[0] = pgrp->init[0] + pgrp->rate*t;
+            if (pgrp->freq == 0)
+            {
+              ref[0] = pgrp->init[0] + pgrp->rate*t;
+            }
+            else
+            {
+              ref[0] = pgrp->init[0] + pgrp->rate * sin(2.*PI*pgrp->freq*t);
+            }
+
     }
 
     switch (pull->eGeom)
