@@ -1,3 +1,25 @@
+              GROMACS Feature branch by Alexander Schlaich
+
+This is an inoffical feature-branch for commonly used features of the
+developer. Currently this includes:
+
+- Modification of the TPI code such that the insertion position can be limited
+  with the parameters tpizmin and tpizmax into a certain slab.
+
+- Modification of the Pull code to allow frequency dependent shearing. This
+  currently is a dirty hack and produces wrong energies due to missing
+  modification of the potentials!
+
+Please be aware that the modifications come absolutely without warranty. If you
+have any questions or comments regarding these features feel free to drop a
+mail to aschlaich@physik.fu-berlin.de.
+
+If you want to use the modified TPI code for Thermodynamic Extrapolation please
+read and cite E. Schneck, F. Sedlmeier, and R. R. Netz, “Hydration repulsion
+between biomembranes results from an interplay of dehydration and
+depolarization,” PNAS, vol. 109, no. 36, pp. 14405–14409, Sep. 2012.
+
+    ===================================================================
 
                Welcome to the official version of GROMACS!
 
