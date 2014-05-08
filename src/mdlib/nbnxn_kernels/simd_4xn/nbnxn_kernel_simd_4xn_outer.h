@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1991-2000, University of Groningen, The Netherlands.
  * Copyright (c) 2001-2009, The GROMACS Development Team
- * Copyright (c) 2012,2013, by the GROMACS development team, led by
+ * Copyright (c) 2012,2013,2014 by the GROMACS development team, led by
  * David van der Spoel, Berk Hess, Erik Lindahl, and including many
  * others, as listed in the AUTHORS file in the top-level source
  * directory and at http://www.gromacs.org.
@@ -120,12 +120,12 @@
     const real *tab_coul_V;
 #endif
     /* Thread-local working buffers for force and potential lookups */
-    int        ti0_array[2*GMX_SIMD_WIDTH_HERE-1], *ti0 = NULL;
-    int        ti1_array[2*GMX_SIMD_WIDTH_HERE-1], *ti1 = NULL;
-    int        ti2_array[2*GMX_SIMD_WIDTH_HERE-1], *ti2 = NULL;
-    int        ti3_array[2*GMX_SIMD_WIDTH_HERE-1], *ti3 = NULL;
+    int         ti0_array[2*GMX_SIMD_WIDTH_HERE], *ti0 = NULL;
+    int         ti1_array[2*GMX_SIMD_WIDTH_HERE], *ti1 = NULL;
+    int         ti2_array[2*GMX_SIMD_WIDTH_HERE], *ti2 = NULL;
+    int         ti3_array[2*GMX_SIMD_WIDTH_HERE], *ti3 = NULL;
 #ifdef CALC_ENERGIES
-    gmx_mm_pr  mhalfsp_S;
+    gmx_mm_pr   mhalfsp_S;
 #endif
 #endif
 
@@ -177,11 +177,11 @@
     gmx_mm_pr  sh_invrc6_S, sh_invrc12_S;
 
     /* cppcheck-suppress unassignedVariable */
-    real       tmpsum_array[15], *tmpsum;
+    real       tmpsum_array[GMX_SIMD_WIDTH_HERE*2], *tmpsum;
 #endif
 #ifdef CALC_SHIFTFORCES
     /* cppcheck-suppress unassignedVariable */
-    real       shf_array[15], *shf;
+    real       shf_array[GMX_SIMD_WIDTH_HERE*2], *shf;
 #endif
 
     int ninner;

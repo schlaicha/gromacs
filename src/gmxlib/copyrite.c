@@ -693,7 +693,7 @@ void gmx_print_version_info(FILE *fp)
 #else
     fprintf(fp, "Precision:          single\n");
 #endif
-    fprintf(fp, "Memory model:       %lu bit\n", 8*sizeof(void *));
+    fprintf(fp, "Memory model:       %u bit\n", (unsigned)(8*sizeof(void *)));
 
 #ifdef GMX_THREAD_MPI
     fprintf(fp, "MPI library:        thread_mpi\n");
@@ -771,3 +771,15 @@ void gmx_print_version_info(FILE *fp)
     gmx_print_version_info_gpu(fp);
 #endif
 }
+
+#ifdef GMX_DOUBLE
+void gmx_is_double_precision()
+{
+    /* allow precision detection */
+}
+#else
+void gmx_is_single_precision()
+{
+    /* allow precision detection */
+}
+#endif

@@ -342,7 +342,7 @@ double do_md(FILE *fplog, t_commrec *cr, int nfile, const t_filenm fnm[],
     debug_gmx();
 
     /* Check for polarizable models and flexible constraints */
-    shellfc = init_shell_flexcon(fplog,
+    shellfc = init_shell_flexcon(fplog, fr->cutoff_scheme == ecutsVERLET,
                                  top_global, n_flexible_constraints(constr),
                                  (ir->bContinuation ||
                                   (DOMAINDECOMP(cr) && !MASTER(cr))) ?
@@ -713,14 +713,9 @@ double do_md(FILE *fplog, t_commrec *cr, int nfile, const t_filenm fnm[],
         fprintf(fplog, "\n");
     }
 
-    /* Set and write start time */
+    print_start(fplog, cr, runtime, "mdrun");
     runtime_start(runtime);
-    print_date_and_time(fplog, cr->nodeid, "Started mdrun", runtime);
     wallcycle_start(wcycle, ewcRUN);
-    if (fplog)
-    {
-        fprintf(fplog, "\n");
-    }
 
     /* safest point to do file checkpointing is here.  More general point would be immediately before integrator call */
 #ifdef GMX_FAHCORE
@@ -1461,6 +1456,10 @@ double do_md(FILE *fplog, t_commrec *cr, int nfile, const t_filenm fnm[],
             fcReportProgress( ir->nsteps, step );
         }
 
+#if defined(__native_client__)
+        fcCheckin(MASTER(cr));
+#endif
+
         /* sync bCPT and fc record-keeping */
         if (bCPT && MASTER(cr))
         {
@@ -1639,7 +1638,7 @@ double do_md(FILE *fplog, t_commrec *cr, int nfile, const t_filenm fnm[],
             if (ETC_ANDERSEN(ir->etc)) /* keep this outside of update_tcouple because of the extra info required to pass */
             {
                 gmx_bool bIfRandomize;
-                bIfRandomize = update_randomize_velocities(ir, step, mdatoms, state, upd, &top->idef, constr);
+                bIfRandomize = update_randomize_velocities(ir, step, mdatoms, state, upd, &top->idef, constr, DOMAINDECOMP(cr));
                 /* if we have constraints, we have to remove the kinetic energy parallel to the bonds */
                 if (constr && bIfRandomize)
                 {
