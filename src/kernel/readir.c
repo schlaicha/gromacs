@@ -504,8 +504,16 @@ void check_ir(const char *mdparin, t_inputrec *ir, t_gromppopts *opts,
     /* TPI STUFF */
     if (EI_TPI(ir->eI))
     {
-        sprintf(err_buf, "TPI only works with pbc = %s", epbc_names[epbcXYZ]);
-        CHECK(ir->ePBC != epbcXYZ);
+        /* we only use uncharge test particles, so it should be safe to use also pbc = xy */
+        //sprintf(err_buf, "TPI only works with pbc = %s", epbc_names[epbcXYZ]);
+        if(ir->ePBC != epbcXYZ)
+        {
+          sprintf(warn_buf, "Using TPI with pbc = %s\n This will make trouble"
+            "with electrostatics (use cut-off for neutral molecules only). Make"
+            "sure you know what you're doing!", epbc_names[epbcXY]);
+          warning(wi, warn_buf);
+        }
+        //CHECK(ir->ePBC != epbcXYZ);
         sprintf(err_buf, "TPI only works with ns = %s", ens_names[ensGRID]);
         CHECK(ir->ns_type != ensGRID);
         sprintf(err_buf, "with TPI nstlist should be larger than zero");
@@ -2094,6 +2102,21 @@ void get_ir(const char *mdparin, const char *mdparout,
     RTYPE ("userreal2",   ir->userreal2,  0);
     RTYPE ("userreal3",   ir->userreal3,  0);
     RTYPE ("userreal4",   ir->userreal4,  0);
+
+    /* Modified test particle insertion into slab */
+    CTYPE ("TPI Insertion in slab from zmin to zmax, when 0 full box is used");
+    RTYPE ("tpizmin",        ir->tpizmin,    0.0);
+    RTYPE ("tpizmax",        ir->tpizmax,    0.0);
+    if (ir->tpizmin < 0.0) {
+        warning_error(wi,"Minimum z coordinate for insertion must be larger than zero");
+    }
+    if (ir->tpizmax < 0.0) {
+        warning_error(wi,"Maximum z coordinate for insertion must be larger than zero");
+    }
+    if (ir->tpizmax < ir->tpizmin ) {
+        warning_error(wi,"Minimum z coordinate for insertion cannot be larger than maximum");
+    }
+
 #undef CTYPE
 
     write_inpfile(mdparout, ninp, inp, FALSE, wi);

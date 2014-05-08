@@ -164,6 +164,7 @@ double do_tpi(FILE *fplog, t_commrec *cr,
     real            dvdl, prescorr, enercorr, dvdlcorr;
     gmx_bool        bEnergyOutOfBounds;
     const char     *tpid_leg[2] = {"direct", "reweighted"};
+    double zmin=0,zmax=state->box[ZZ][ZZ];
 
     /* Since there is no upper limit to the insertion energies,
      * we need to set an upper limit for the distribution output.
@@ -211,7 +212,7 @@ double do_tpi(FILE *fplog, t_commrec *cr,
        init_em(fplog,TPI,inputrec,&lambda,nrnb,mu_tot,
        state->box,fr,mdatoms,top,cr,nfile,fnm,NULL,NULL);*/
     /* We never need full pbc for TPI */
-    fr->ePBC = epbcXYZ;
+    //fr->ePBC = epbcXYZ;
     /* Determine the temperature for the Boltzmann weighting */
     temp = inputrec->opts.ref_t[0];
     if (fplog)
@@ -329,6 +330,20 @@ double do_tpi(FILE *fplog, t_commrec *cr,
                 fprintf(fplog, "Will use the same neighborlist for %d insertions in a sphere of radius %f\n", inputrec->nstlist, drmax);
             }
         }
+        /*insertion in slab from zmin to zmax*/
+        if (inputrec->tpizmin > 0) {
+            zmin = inputrec->tpizmin;
+        }
+        if ((inputrec->tpizmax > 0)&& (inputrec->tpizmax < state->box[ZZ][ZZ]) || fr->ePBC != epbcXYZ) {
+            zmax = inputrec->tpizmax;
+        }
+        if (zmin > zmax) {
+            gmx_fatal(FARGS,"Cannot insert from %f to %f\n",zmin,zmax);
+        }
+        else {
+            fprintf(stderr, "Test Particle Insertion from zmin: %f to zmax: %f\n",zmin,zmax);
+        }
+        /*slab modification end*/
     }
     else
     {
@@ -483,7 +498,22 @@ double do_tpi(FILE *fplog, t_commrec *cr,
                     /* Generate a random position in the box */
                     x_init[XX] = gmx_rng_uniform_real(tpi_rand)*state->box[XX][XX];
                     x_init[YY] = gmx_rng_uniform_real(tpi_rand)*state->box[YY][YY];
-                    x_init[ZZ] = gmx_rng_uniform_real(tpi_rand)*state->box[ZZ][ZZ];
+                    /* Slab insertion in z-coordinate */
+                    if (inputrec->tpizmax > state->box[ZZ][ZZ]) {
+                        zmax = state->box[ZZ][ZZ];
+                    }
+                    else {
+                        zmax = inputrec->tpizmax;
+                    }
+                    if (zmin > zmax) {
+                        gmx_fatal(FARGS,"Cannot insert from %f to %f\n",zmin,zmax);
+                    }
+                    if (zmin == zmax) {
+                        x_init[ZZ] = zmin;
+                    }
+                    else {
+                        x_init[ZZ] = zmin + gmx_rng_uniform_real(tpi_rand)*(zmax-zmin);
+                    }
                 }
                 if (inputrec->nstlist == 1)
                 {
