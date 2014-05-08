@@ -1001,6 +1001,13 @@ void check_ir(const char *mdparin, t_inputrec *ir, t_gromppopts *opts,
             }
         }
     }
+    else
+    {
+        if (ir->epc == epcMTTK)
+        {
+            warning_error(wi, "MTTK pressure coupling requires a Velocity-verlet integrator");
+        }
+    }
 
     /* ELECTROSTATICS */
     /* More checks are in triple check (grompp.c) */
@@ -1089,13 +1096,22 @@ void check_ir(const char *mdparin, t_inputrec *ir, t_gromppopts *opts,
         warning_note(wi, warn_buf);
     }
 
-    if (ir->coulombtype == eelPMESWITCH)
+    if (ir->coulombtype == eelPMESWITCH || ir->coulomb_modifier == eintmodPOTSWITCH)
     {
         if (ir->rcoulomb_switch/ir->rcoulomb < 0.9499)
         {
-            sprintf(warn_buf, "The switching range for %s should be 5%% or less, energy conservation will be good anyhow, since ewald_rtol = %g",
-                    eel_names[ir->coulombtype],
-                    ir->ewald_rtol);
+            real percentage  = 100*(ir->rcoulomb-ir->rcoulomb_switch)/ir->rcoulomb;
+            sprintf(warn_buf, "The switching range for should be 5%% or less (currently %.2f%% using a switching range of %4f-%4f) for accurate electrostatic energies, energy conservation will be good regardless, since ewald_rtol = %g.",
+                    percentage,ir->rcoulomb_switch,ir->rcoulomb,ir->ewald_rtol);
+            warning(wi, warn_buf);
+        }
+    }
+
+    if (ir->vdwtype == evdwSWITCH || ir->vdw_modifier == eintmodPOTSWITCH)
+    {
+        if (ir->rvdw_switch==0)
+        {
+            sprintf(warn_buf, "rvdw-switch is equal 0 even though you are using a switched Lennard-Jones potential.  This suggests it was not set in the mdp, which can lead to large energy errors.  In GROMACS, 0.05 to 0.1 nm is often a reasonable vdw switching range.");
             warning(wi, warn_buf);
         }
     }
@@ -3544,7 +3560,8 @@ void triple_check(const char *mdparin, t_inputrec *ir, gmx_mtop_t *sys,
 
     if (EI_DYNAMICS(ir->eI) && !EI_SD(ir->eI) && ir->eI != eiBD &&
         ir->comm_mode == ecmNO &&
-        !(absolute_reference(ir, sys, FALSE, AbsRef) || ir->nsteps <= 10))
+        !(absolute_reference(ir, sys, FALSE, AbsRef) || ir->nsteps <= 10) &&
+        !ETC_ANDERSEN(ir->etc))
     {
         warning(wi, "You are not using center of mass motion removal (mdp option comm-mode), numerical rounding errors can lead to build up of kinetic energy of the center of mass");
     }
@@ -3772,6 +3789,11 @@ void double_check(t_inputrec *ir, matrix box, gmx_bool bConstr, warninp_t wi)
         {
             warning_error(wi, "MTTK not compatible with lincs -- use shake instead.");
         }
+    }
+
+    if (bConstr && ir->epc == epcMTTK)
+    {
+        warning_note(wi, "MTTK with constraints is deprecated, and will be removed in GROMACS 5.1");
     }
 
     if (ir->LincsWarnAngle > 90.0)

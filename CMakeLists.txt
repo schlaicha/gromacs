@@ -431,7 +431,7 @@ include(TestBigEndian)
 test_big_endian(GMX_INTEGER_BIG_ENDIAN)
 
 
-if(APPLE OR CYGWIN OR ${CMAKE_SYSTEM_NAME} MATCHES "Linux|.*BSD")
+if(APPLE OR CYGWIN OR ${CMAKE_SYSTEM_NAME} MATCHES "Linux|.*BSD|GNU")
     # Maybe Solaris should be here? Patch this if you know!
     SET(SHARED_LIBS_DEFAULT ON)
 elseif(WIN32 OR ${CMAKE_SYSTEM_NAME} MATCHES "BlueGene")
@@ -610,10 +610,26 @@ gmx_test_inline_asm_gcc_x86(GMX_X86_GCC_INLINE_ASM)
 
 include(gmxSetBuildInformation)
 gmx_set_build_information()
-if(BUILD_CPU_FEATURES MATCHES "rdtscp" AND NOT GMX_DISTRIBUTABLE_BUILD)
+# Turn on RDTSCP if:
+# - the build system's CPU supports it
+# - the acceleration is set to AVX as all AVX-capable CPUs support AVX (which
+#   at this point means that the user set it).
+# Note: it's better to not use the later set value of GMX_CPU_ACCELERATION because
+# it reflects the system's capability of both compiling and running AVX code.
+# TODO: After merge with 5.0 one could implement a cache variable dependency
+# such that GMX_USE_RDTSCP can change if GMX_CPU_ACCELERATION is changed to AVX
+# after the first cmake pass.
+if (BUILD_CPU_FEATURES MATCHES "rdtscp" OR GMX_CPU_ACCELERATION MATCHES "AVX")
+    set(GMX_USE_RDTSCP_DEFAULT_VALUE ON)
+else()
+    set(GMX_USE_RDTSCP_DEFAULT_VALUE OFF)
+endif()
+option(GMX_USE_RDTSCP "Use RDTSCP for better CPU-based timers (available on recent x86 CPUs; might need to be off when compiling for heterogeneous environments)" ${GMX_USE_RDTSCP_DEFAULT_VALUE})
+mark_as_advanced(GMX_USE_RDTSCP)
+if(GMX_USE_RDTSCP)
     # The timestep counter headers do not include config.h
     add_definitions(-DHAVE_RDTSCP)
-endif(BUILD_CPU_FEATURES MATCHES "rdtscp" AND NOT GMX_DISTRIBUTABLE_BUILD)
+endif()
 
 include(gmxTestFloatFormat)
 gmx_test_float_format(GMX_FLOAT_FORMAT_IEEE754 

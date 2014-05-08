@@ -342,7 +342,7 @@ double do_md(FILE *fplog, t_commrec *cr, int nfile, const t_filenm fnm[],
     debug_gmx();
 
     /* Check for polarizable models and flexible constraints */
-    shellfc = init_shell_flexcon(fplog, cr, fr->cutoff_scheme == ecutsVERLET,
+    shellfc = init_shell_flexcon(fplog, fr->cutoff_scheme == ecutsVERLET,
                                  top_global, n_flexible_constraints(constr),
                                  (ir->bContinuation ||
                                   (DOMAINDECOMP(cr) && !MASTER(cr))) ?
@@ -1638,7 +1638,7 @@ double do_md(FILE *fplog, t_commrec *cr, int nfile, const t_filenm fnm[],
             if (ETC_ANDERSEN(ir->etc)) /* keep this outside of update_tcouple because of the extra info required to pass */
             {
                 gmx_bool bIfRandomize;
-                bIfRandomize = update_randomize_velocities(ir, step, mdatoms, state, upd, &top->idef, constr);
+                bIfRandomize = update_randomize_velocities(ir, step, mdatoms, state, upd, &top->idef, constr, DOMAINDECOMP(cr));
                 /* if we have constraints, we have to remove the kinetic energy parallel to the bonds */
                 if (constr && bIfRandomize)
                 {
