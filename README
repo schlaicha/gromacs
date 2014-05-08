@@ -1,8 +1,8 @@
               GROMACS Feature branch by Alexander Schlaich
 
 This is an inoffical feature-branch for a modification of the TPI code such
-that the insertion position can be limited with the parameters tpizmin and
-tpizmax into a certain slab.
+that the insertion position can be limited into a certain slab by the
+parameters tpizmin and tpizmax in the mdp-file.
 
 Please be aware that the modifications come absolutely without warranty. If you
 have any questions or comments regarding these features feel free to drop a
