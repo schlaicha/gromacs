@@ -331,10 +331,10 @@ double do_tpi(FILE *fplog, t_commrec *cr,
             }
         }
         /*insertion in slab from zmin to zmax*/
-        if (inputrec->tpizmin > 0) {
+        if (inputrec->tpizmin >= 0) {
             zmin = inputrec->tpizmin;
         }
-        if ((inputrec->tpizmax > 0)&& (inputrec->tpizmax < state->box[ZZ][ZZ]) || fr->ePBC != epbcXYZ) {
+        if ((inputrec->tpizmax >= 0)&& (inputrec->tpizmax < state->box[ZZ][ZZ]) || fr->ePBC != epbcXYZ) {
             zmax = inputrec->tpizmax;
         }
         if (zmin > zmax) {
