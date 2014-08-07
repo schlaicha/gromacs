@@ -1101,7 +1101,7 @@ void check_ir(const char *mdparin, t_inputrec *ir, t_gromppopts *opts,
         if (ir->rcoulomb_switch/ir->rcoulomb < 0.9499)
         {
             real percentage  = 100*(ir->rcoulomb-ir->rcoulomb_switch)/ir->rcoulomb;
-            sprintf(warn_buf, "The switching range for should be 5%% or less (currently %.2f%% using a switching range of %4f-%4f) for accurate electrostatic energies, energy conservation will be good regardless, since ewald_rtol = %g.",
+            sprintf(warn_buf, "The switching range should be 5%% or less (currently %.2f%% using a switching range of %4f-%4f) for accurate electrostatic energies, energy conservation will be good regardless, since ewald_rtol = %g.",
                     percentage,ir->rcoulomb_switch,ir->rcoulomb,ir->ewald_rtol);
             warning(wi, warn_buf);
         }
@@ -1246,6 +1246,12 @@ void check_ir(const char *mdparin, t_inputrec *ir, t_gromppopts *opts,
                     eel_names[eelPMESWITCH], eel_names[eelRF_ZERO]);
             warning_note(wi, warn_buf);
         }
+    }
+
+    if (EI_VV(ir->eI) && IR_TWINRANGE(*ir) && ir->nstlist > 1)
+    {
+        sprintf(warn_buf, "Twin-range multiple time stepping does not work with integrator %s.", ei_names[ir->eI]);
+        warning_error(wi, warn_buf);
     }
 
     /* IMPLICIT SOLVENT */

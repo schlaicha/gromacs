@@ -258,20 +258,14 @@ static void write_xvgr_graphs(const char *file, int ngraphs, int nsetspergraph,
         {
             for (i = 0; i < n; i++)
             {
-                if (bSplit && i > 0 && abs(x[i]) < 1e-5)
+                if (bSplit && i > 0 && fabs(x[i]) < 1e-5)
                 {
-                    if (output_env_get_print_xvgr_codes(oenv))
-                    {
-                        fprintf(out, "&\n");
-                    }
+                    fprintf(out, "%s\n", output_env_get_print_xvgr_codes(oenv) ? "&" : "");
                 }
                 fprintf(out, "%10.4f %10.5f\n",
                         x[i]*scale_x, y ? y[g][i] : sy[g][s][i]);
             }
-            if (output_env_get_print_xvgr_codes(oenv))
-            {
-                fprintf(out, "&\n");
-            }
+            fprintf(out, "%s\n", output_env_get_print_xvgr_codes(oenv) ? "&" : "");
         }
     }
     ffclose(out);
@@ -473,8 +467,10 @@ static void overlap(const char *outfile, int natoms,
 
     out = xvgropen(outfile, "Subspace overlap",
                    "Eigenvectors of trajectory 2", "Overlap", oenv);
-    fprintf(out, "@ subtitle \"using %d eigenvectors of trajectory 1\"\n",
-            noutvec);
+    if(output_env_get_print_xvgr_codes(oenv))
+    {
+        fprintf(out, "@ subtitle \"using %d eigenvectors of trajectory 1\"\n",noutvec);
+    }
     overlap = 0;
     for (x = 0; x < nvec2; x++)
     {
@@ -671,9 +667,9 @@ static void project(const char *trajfile, t_topology *top, int ePBC, matrix topb
                            oenv);
         for (i = 0; i < nframes; i++)
         {
-            if (bSplit && i > 0 && abs(inprod[noutvec][i]) < 1e-5)
+            if (bSplit && i > 0 && fabs(inprod[noutvec][i]) < 1e-5)
             {
-                fprintf(xvgrout, "&\n");
+                fprintf(xvgrout, "%s\n", output_env_get_print_xvgr_codes(oenv) ? "&" : "");
             }
             fprintf(xvgrout, "%10.5f %10.5f\n", inprod[0][i], inprod[noutvec-1][i]);
         }
@@ -759,7 +755,7 @@ static void project(const char *trajfile, t_topology *top, int ePBC, matrix topb
             j = 0;
             for (i = 0; i < atoms.nr; i++)
             {
-                if (j > 0 && bSplit && abs(inprod[noutvec][i]) < 1e-5)
+                if (j > 0 && bSplit && fabs(inprod[noutvec][i]) < 1e-5)
                 {
                     fprintf(out, "TER\n");
                     j = 0;
