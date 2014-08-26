@@ -56,12 +56,12 @@ mark_as_advanced(DART_ROOT)
 # machine with no git. 
 #
 # NOTE: when releasing the "-dev" suffix needs to be stripped off!
-set(PROJECT_VERSION "4.6.6-dev")
+set(PROJECT_VERSION "4.6.7-dev")
 # The version number of the regressiontest tarball against which this
 # git branch can be tested. Normally, this will be the version of the
 # last patch release. Comment the next line out for branches leading
 # to a major/minor release.
-set(REGRESSIONTEST_VERSION "4.6.5")
+set(REGRESSIONTEST_VERSION "4.6.6")
 set(CUSTOM_VERSION_STRING ""
     CACHE STRING "Custom version string (if empty, use hard-coded default)")
 mark_as_advanced(CUSTOM_VERSION_STRING)
@@ -1195,14 +1195,22 @@ else(GMX_DEFAULT_SUFFIX)
 endif(GMX_DEFAULT_SUFFIX)
 set(SUFFIX_QUIETLY TRUE CACHE INTERNAL "")
 
-##################################################################
-# Shared library settings - Darwin uses INSTALL_NAME_DIR instead!
-##################################################################
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+################################################################
+# Shared library settings
+################################################################
+if((NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin") OR ((CMAKE_SYSTEM_VERSION VERSION_GREATER 8.0) AND (NOT CMAKE_VERSION VERSION_LESS 2.8.12)))
     set(CMAKE_SKIP_BUILD_RPATH  FALSE)
     set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
-    set(CMAKE_INSTALL_RPATH "\\\$ORIGIN/../${GMXLIB}")
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+        set(CMAKE_INSTALL_RPATH "\\\$ORIGIN/../${GMXLIB}")
+    else()
+        set(CMAKE_INSTALL_RPATH "@executable_path/../${GMXLIB}")
+    endif()
     set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+    set(CMAKE_MACOSX_RPATH 1)
+else()
+    # We are on Darwin/OSX, and cmake cannot handle proper RPATHs
+    set(CMAKE_INSTALL_NAME_DIR "${LIB_INSTALL_DIR}")
 endif()
 
 #COPYING file: Only necessary for binary distributions.

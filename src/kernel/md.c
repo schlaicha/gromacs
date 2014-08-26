@@ -342,11 +342,30 @@ double do_md(FILE *fplog, t_commrec *cr, int nfile, const t_filenm fnm[],
     debug_gmx();
 
     /* Check for polarizable models and flexible constraints */
-    shellfc = init_shell_flexcon(fplog, fr->cutoff_scheme == ecutsVERLET,
+    shellfc = init_shell_flexcon(fplog,
                                  top_global, n_flexible_constraints(constr),
                                  (ir->bContinuation ||
                                   (DOMAINDECOMP(cr) && !MASTER(cr))) ?
                                  NULL : state_global->x);
+    if (shellfc && ir->nstcalcenergy != 1)
+    {
+        gmx_fatal(FARGS, "You have nstcalcenergy set to a value (%d) that is different from 1.\nThis is not supported in combinations with shell particles.\nPlease make a new tpr file.", ir->nstcalcenergy);
+    }
+    if (shellfc && DOMAINDECOMP(cr))
+    {
+        gmx_fatal(FARGS, "In order to run parallel simulations with shells you need to use the -pd flag to mdrun.");
+    }
+    if (shellfc && ir->eI == eiNM)
+    {
+        /* Currently shells don't work with Normal Modes */
+        gmx_fatal(FARGS, "Normal Mode analysis is not supported with shells.\nIf you'd like to help with adding support, we have an open discussion at http://redmine.gromacs.org/issues/879\n");
+    }
+
+    if (vsite && ir->eI == eiNM)
+    {
+        /* Currently virtual sites don't work with Normal Modes */
+        gmx_fatal(FARGS, "Normal Mode analysis is not supported with virtual sites.\nIf you'd like to help with adding support, we have an open discussion at http://redmine.gromacs.org/issues/879\n");
+    }
 
     if (DEFORM(*ir))
     {
@@ -1217,11 +1236,15 @@ double do_md(FILE *fplog, t_commrec *cr, int nfile, const t_filenm fnm[],
              * step to combine the long-range forces on these steps.
              * For nstcalclr=1 this is not done, since the forces would have been added
              * directly to the short-range forces already.
+             *
+             * TODO Remove various aspects of VV+twin-range in master
+             * branch, because VV integrators did not ever support
+             * twin-range multiple time stepping with constraints.
              */
             bUpdateDoLR = (fr->bTwinRange && do_per_step(step, ir->nstcalclr));
 
             update_coords(fplog, step, ir, mdatoms, state, fr->bMolPBC,
-                          f, bUpdateDoLR, fr->f_twin, fcd,
+                          f, bUpdateDoLR, fr->f_twin, bCalcVir ? &fr->vir_twin_constr : NULL, fcd,
                           ekind, M, wcycle, upd, bInitStep, etrtVELOCITY1,
                           cr, nrnb, constr, &top->idef);
 
@@ -1271,6 +1294,12 @@ double do_md(FILE *fplog, t_commrec *cr, int nfile, const t_filenm fnm[],
                                        &top->idef, shake_vir, NULL,
                                        cr, nrnb, wcycle, upd, constr,
                                        bInitStep, TRUE, bCalcVir, vetanew);
+
+                    if (bCalcVir && bUpdateDoLR && ir->nstcalclr > 1)
+                    {
+                        /* Correct the virial for multiple time stepping */
+                        m_sub(shake_vir, fr->vir_twin_constr, shake_vir);
+                    }
 
                     if (!bOK && !bFFscan)
                     {
@@ -1723,7 +1752,7 @@ double do_md(FILE *fplog, t_commrec *cr, int nfile, const t_filenm fnm[],
 
                     /* velocity half-step update */
                     update_coords(fplog, step, ir, mdatoms, state, fr->bMolPBC, f,
-                                  bUpdateDoLR, fr->f_twin, fcd,
+                                  bUpdateDoLR, fr->f_twin, bCalcVir ? &fr->vir_twin_constr : NULL, fcd,
                                   ekind, M, wcycle, upd, FALSE, etrtVELOCITY2,
                                   cr, nrnb, constr, &top->idef);
                 }
@@ -1740,7 +1769,7 @@ double do_md(FILE *fplog, t_commrec *cr, int nfile, const t_filenm fnm[],
                 bUpdateDoLR = (fr->bTwinRange && do_per_step(step, ir->nstcalclr));
 
                 update_coords(fplog, step, ir, mdatoms, state, fr->bMolPBC, f,
-                              bUpdateDoLR, fr->f_twin, fcd,
+                              bUpdateDoLR, fr->f_twin, bCalcVir ? &fr->vir_twin_constr : NULL, fcd,
                               ekind, M, wcycle, upd, bInitStep, etrtPOSITION, cr, nrnb, constr, &top->idef);
                 wallcycle_stop(wcycle, ewcUPDATE);
 
@@ -1749,6 +1778,12 @@ double do_md(FILE *fplog, t_commrec *cr, int nfile, const t_filenm fnm[],
                                    &top->idef, shake_vir, force_vir,
                                    cr, nrnb, wcycle, upd, constr,
                                    bInitStep, FALSE, bCalcVir, state->veta);
+
+                if (bCalcVir && bUpdateDoLR && ir->nstcalclr > 1)
+                {
+                    /* Correct the virial for multiple time stepping */
+                    m_sub(shake_vir, fr->vir_twin_constr, shake_vir);
+                }
 
                 if (ir->eI == eiVVAK)
                 {
@@ -1768,7 +1803,7 @@ double do_md(FILE *fplog, t_commrec *cr, int nfile, const t_filenm fnm[],
                     bUpdateDoLR = (fr->bTwinRange && do_per_step(step, ir->nstcalclr));
 
                     update_coords(fplog, step, ir, mdatoms, state, fr->bMolPBC, f,
-                                  bUpdateDoLR, fr->f_twin, fcd,
+                                  bUpdateDoLR, fr->f_twin, bCalcVir ? &fr->vir_twin_constr : NULL, fcd,
                                   ekind, M, wcycle, upd, bInitStep, etrtPOSITION, cr, nrnb, constr, &top->idef);
                     wallcycle_stop(wcycle, ewcUPDATE);
 

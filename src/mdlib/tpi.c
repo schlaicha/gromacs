@@ -141,7 +141,7 @@ double do_tpi(FILE *fplog, t_commrec *cr,
     gmx_groups_t   *groups;
     gmx_enerdata_t *enerd;
     rvec           *f;
-    real            lambda, t, temp, beta, drmax, epot;
+    real            lambda, t, temp, beta, drmax, drmaxz, epot;
     double          embU, sum_embU, *sum_UgembU, V, V_all, VembU_all;
     t_trxstatus    *status;
     t_trxframe      rerun_fr;
@@ -334,7 +334,7 @@ double do_tpi(FILE *fplog, t_commrec *cr,
         if (inputrec->tpizmin >= 0) {
             zmin = inputrec->tpizmin;
         }
-        if ((inputrec->tpizmax >= 0)&& (inputrec->tpizmax <= state->box[ZZ][ZZ]) || fr->ePBC != epbcXYZ) {
+        if ( ( (inputrec->tpizmax >= 0) && (inputrec->tpizmax <= state->box[ZZ][ZZ]) ) || fr->ePBC != epbcXYZ) {
             zmax = inputrec->tpizmax;
         }
         if (zmin > zmax) {
@@ -342,6 +342,12 @@ double do_tpi(FILE *fplog, t_commrec *cr,
         }
         else {
             fprintf(stderr, "Test Particle Insertion from zmin: %f to zmax: %f\n",zmin,zmax);
+        }
+        if (drmax < (zmax-zmin)) {
+          drmaxz = drmax;
+        }
+        else {
+          drmaxz = zmax - zmin;
         }
         /*slab modification end*/
     }
@@ -528,7 +534,9 @@ double do_tpi(FILE *fplog, t_commrec *cr,
                         dx[YY] = (2*gmx_rng_uniform_real(tpi_rand) - 1)*drmax;
                         dx[ZZ] = (2*gmx_rng_uniform_real(tpi_rand) - 1)*drmax;
                     }
-                    while (norm2(dx) > drmax*drmax);
+                    /* Make sure the generated coordinates are inside the slab */
+                    while (norm2(dx) > drmax*drmax && 
+                        (x_init[ZZ]-dx[ZZ]) >= zmin && (x_init[ZZ]+dx[ZZ]) <= zmax);
                     rvec_add(x_init, dx, x_tp);
                 }
             }
