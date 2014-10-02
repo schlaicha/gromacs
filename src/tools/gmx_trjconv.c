@@ -732,6 +732,7 @@ int gmx_trjconv(int argc, char *argv[])
     static int       skip_nr       = 1, ndec = 3, nzero = 0;
     static real      tzero         = 0, delta_t = 0, timestep = 0, ttrunc = -1, tdump = -1, split_t = 0;
     static rvec      newbox        = {0, 0, 0}, shift = {0, 0, 0}, trans = {0, 0, 0};
+    static real      newz          = 0;
     static char     *exec_command  = NULL;
     static real      dropunder     = 0, dropover = 0;
     static gmx_bool  bRound        = FALSE;
@@ -766,6 +767,9 @@ int gmx_trjconv(int argc, char *argv[])
           { center_opt }, "Center for -pbc and -center" },
         { "-box", FALSE, etRVEC,
           { newbox },
+          "Size for new cubic box (default: read from input)" },
+	{ "-boxz", FALSE, etREAL,
+          { &newz },
           "Size for new cubic box (default: read from input)" },
         { "-clustercenter", FALSE, etRVEC,
           { clustercenter },
@@ -861,7 +865,7 @@ int gmx_trjconv(int argc, char *argv[])
     gmx_bool         bRmPBC, bPBCWhole, bPBCcomRes, bPBCcomMol, bPBCcomAtom, bPBC, bNoJump, bCluster;
     gmx_bool         bCopy, bDoIt, bIndex, bTDump, bSetTime, bTPS = FALSE, bDTset = FALSE;
     gmx_bool         bExec, bTimeStep = FALSE, bDumpFrame = FALSE, bSetPrec, bNeedPrec;
-    gmx_bool         bHaveFirstFrame, bHaveNextFrame, bSetBox, bSetUR, bSplit = FALSE;
+    gmx_bool         bHaveFirstFrame, bHaveNextFrame, bSetBox, bSetBoxz, bSetUR, bSplit = FALSE;
     gmx_bool         bSubTraj = FALSE, bDropUnder = FALSE, bDropOver = FALSE, bTrans = FALSE;
     gmx_bool         bWriteFrame, bSplitHere;
     const char      *top_file, *in_file, *out_file = NULL;
@@ -908,6 +912,7 @@ int gmx_trjconv(int argc, char *argv[])
     {
         /* mark active cmdline options */
         bSetBox    = opt2parg_bSet("-box", NPA, pa);
+	bSetBoxz   = opt2parg_bSet("-boxz", NPA, pa);
         bSetTime   = opt2parg_bSet("-t0", NPA, pa);
         bSetPrec   = opt2parg_bSet("-ndec", NPA, pa);
         bSetUR     = opt2parg_bSet("-ur", NPA, pa);
@@ -1381,6 +1386,13 @@ int gmx_trjconv(int argc, char *argv[])
                         fr.box[m][m] = newbox[m];
                     }
                 }
+
+                if (bSetBoxz)
+                {
+                    /* generate new z-coordinate */
+                    fr.box[2][2] = newz;
+                }
+
 
                 if (bTrans)
                 {
