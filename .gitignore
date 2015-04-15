@@ -13,3 +13,6 @@ doxygen-doc
 .project
 .cproject
 CMakeLists.txt.user
+build*
+\#*
+*.swp
