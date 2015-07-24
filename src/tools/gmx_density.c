@@ -298,7 +298,8 @@ void calc_density(const char *fn, atom_id **index, int gnx[],
                  nr_frames = 0, /* number of frames */
                  slice;         /* current slice */
     real         t,
-                 z;
+                 z,
+                 avSlWidth;     /* calculate the average slice width (important for NPT)
     char        *buf;    /* for tmp. keeping atomname */
     gmx_rmpbc_t  gpbc = NULL;
 
@@ -336,6 +337,7 @@ void calc_density(const char *fn, atom_id **index, int gnx[],
         }
 
         *slWidth = box[axis][axis]/(*nslices);
+        avSlWidth += *slWidth;
         invvol   = *nslices/(box[XX][XX]*box[YY][YY]*box[ZZ][ZZ]);
         teller++;
 
@@ -380,6 +382,7 @@ void calc_density(const char *fn, atom_id **index, int gnx[],
             (*slDensity)[n][i] /= nr_frames;
         }
     }
+    *slWidth = avSlWidth / nr_frames; /* return the averaged slice width */
 
     sfree(x0); /* free memory used by coordinate array */
 }
