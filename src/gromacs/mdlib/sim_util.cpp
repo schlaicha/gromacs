@@ -245,14 +245,17 @@ static void sum_forces(int start, int end, rvec f[], rvec flr[])
  */
 static void calc_f_el(FILE *fp, int  start, int homenr,
                       real charge[], rvec f[],
-                      t_cosines Ex[], t_cosines Et[], double t)
+                      t_cosines Ex[], t_cosines Et[], double t,
+                      rvec x[], matrix box)
 {
     rvec Ext;
+    rvec boxL;
     real t0;
     int  i, m;
 
     for (m = 0; (m < DIM); m++)
     {
+      boxL[m] = box[m][m];
         if (Et[m].n > 0)
         {
             if (Et[m].n == 3)
@@ -275,7 +278,15 @@ static void calc_f_el(FILE *fp, int  start, int homenr,
             Ext[m] *= Ex[m].a[0]*FIELDFAC;
             for (i = start; (i < start+homenr); i++)
             {
-                f[i][m] += charge[i]*Ext[m];
+                if (x[i][m] > 0. && x[i][m] < .1)
+                {
+                    //fprintf(stderr, "%10g %d %d %10g %10g %10g\n", t, m, ZZ, x[i][m], x[i][ZZ], boxL[m]);
+                    f[i][m] += charge[i]*Ext[m];
+                }
+                else if (x[i][m] < boxL[m] && x[i][m] > boxL[m] - .1)
+                {
+                    f[i][m] -= charge[i]*Ext[m];
+                }
             }
         }
         else
@@ -1470,7 +1481,7 @@ void do_force_cutsVERLET(FILE *fplog, t_commrec *cr,
             /* Compute forces due to electric field */
             calc_f_el(MASTER(cr) ? field : NULL,
                       start, homenr, mdatoms->chargeA, fr->f_novirsum,
-                      inputrec->ex, inputrec->et, t);
+                      inputrec->ex, inputrec->et, t, x, box);
         }
 
         /* If we have NoVirSum forces, but we do not calculate the virial,
@@ -1845,7 +1856,7 @@ void do_force_cutsGROUP(FILE *fplog, t_commrec *cr,
             /* Compute forces due to electric field */
             calc_f_el(MASTER(cr) ? field : NULL,
                       start, homenr, mdatoms->chargeA, fr->f_novirsum,
-                      inputrec->ex, inputrec->et, t);
+                      inputrec->ex, inputrec->et, t, x, box);
         }
 
         /* Communicate the forces */
