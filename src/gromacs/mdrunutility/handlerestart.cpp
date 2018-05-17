@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2015,2016, by the GROMACS development team, led by
+ * Copyright (c) 2015,2016,2017, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -120,7 +120,9 @@ read_checkpoint_data(const char *filename, int *simulation_part,
         if (!gmx_fexist(filename) || (!(fp = gmx_fio_open(filename, "r")) ))
         {
             *simulation_part = 0;
-            fprintf(stderr, "Warning: No checkpoint file found with -cpi option. Assuming this is a new run.\n\n");
+            /* We have already warned the user that no checkpoint file existed before, don't
+             * need to do it again
+             */
         }
         else
         {
@@ -181,7 +183,9 @@ read_checkpoint_data(const char *filename, int *simulation_part,
                               "Checkpointing is merely intended for plain continuation of runs. "
                               "For safety reasons you must specify all file names (e.g. with -deffnm), "
                               "and all these files must match the names used in the run prior to checkpointing "
-                              "since we will append to them by default. If the files are not available, you "
+                              "since we will append to them by default. If you used -deffnm and the files listed above as not "
+                              "present are in fact present, try explicitly specifying them in respective mdrun options. "
+                              "If the files are not available, you "
                               "can add the -noappend flag to mdrun and write separate new parts. "
                               "For mere concatenation of files, you should use the gmx trjcat tool instead.",
                               nfiles-nexist, nfiles);
@@ -253,7 +257,7 @@ handleRestart(t_commrec *cr,
                              part_suffix, &bAddPart, bDoAppendFiles);
         if (sim_part_fn == 0 && MULTIMASTER(cr))
         {
-            fprintf(stdout, "No previous checkpoint file present, assuming this is a new run.\n");
+            fprintf(stdout, "No previous checkpoint file present with -cpi option, assuming this is a new run.\n");
         }
         else
         {

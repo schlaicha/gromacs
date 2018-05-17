@@ -1048,9 +1048,20 @@ Temperature coupling
    (10)
    The number of chained Nose-Hoover thermostats for velocity Verlet
    integrators, the leap-frog :mdp-value:`integrator=md` integrator
-   only supports 1. Data for the NH chain variables is not printed to
-   the :ref:`edr` file, but can be using the ``GMX_NOSEHOOVER_CHAINS``
-   environment variable
+   only supports 1. Data for the NH chain variables is not printed
+   to the :ref:`edr` file by default, but can be turned on with the
+   :mdp:`print-nose-hoover-chains` option.
+
+.. mdp:: print-nose-hoover-chain-variables
+
+   .. mdp-value:: no
+
+      Do not store Nose-Hoover chain variables in the energy file.
+
+   .. mdp-value:: yes
+
+      Store all positions and velocities of the Nose-Hoover chain
+      in the energy file.
 
 .. mdp:: tc-grps
 
@@ -1812,6 +1823,112 @@ applicable pulling coordinate.
    As :mdp:`pull-coord1-k`, but for state B. This is only used when
    :mdp:`free-energy` is turned on. The force constant is then (1 -
    lambda) * :mdp:`pull-coord1-k` + lambda * :mdp:`pull-coord1-kB`.
+
+
+Enforced rotation
+^^^^^^^^^^^^^^^^^
+
+These :ref:`mdp` parameters can be used enforce the rotation of a group of atoms,
+e.g. a protein subunit. The `reference manual`_ describes in detail 13 different potentials
+that can be used to achieve such a rotation.
+
+.. mdp:: rotation
+
+   .. mdp-value:: no
+
+      No enforced rotation will be applied. All enforced rotation options will
+      be ignored (and if present in the :ref:`mdp` file, they unfortunately
+      generate warnings).
+
+   .. mdp-value:: yes
+
+      Apply the rotation potential specified by :mdp:`rot-type` to the group of atoms given
+      under the :mdp:`rot-group` option.
+
+.. mdp:: rot-ngroups
+
+   (1)
+   Number of rotation groups.
+
+.. mdp:: rot-group0
+
+   Name of rotation group 0 in the index file.
+
+.. mdp:: rot-type0
+
+   (iso)
+   Type of rotation potential that is applied to rotation group 0. Can be of of the following:
+   ``iso``, ``iso-pf``, ``pm``, ``pm-pf``, ``rm``, ``rm-pf``, ``rm2``, ``rm2-pf``,
+   ``flex``, ``flex-t``, ``flex2``, or ``flex2-t``.
+
+.. mdp:: rot-massw0
+
+   (no)
+   Use mass weighted rotation group positions.
+
+.. mdp:: rot-vec0
+
+   (1.0 0.0 0.0)
+   Rotation vector, will get normalized.
+
+.. mdp:: rot-pivot0
+
+   (0.0 0.0 0.0)
+   Pivot point (nm) for the potentials ``iso``, ``pm``, ``rm``, and ``rm2``.
+
+.. mdp:: rot-rate0
+
+   (0)
+   Reference rotation rate (degree/ps) of group 0.
+
+.. mdp:: rot-k0
+
+   (0)
+   Force constant (kJ/(mol*nm^2)) for group 0.
+
+.. mdp:: rot-slab-dist0
+
+   (1.5)
+   Slab distance (nm), if a flexible axis rotation type was chosen.
+
+.. mdp:: rot-min-gauss0
+
+   (0.001)
+   Minimum value (cutoff) of Gaussian function for the force to be evaluated
+   (for the flexible axis potentials).
+
+.. mdp:: rot-eps0
+
+   (0.0001)
+   Value of additive constant epsilon' (nm^2) for ``rm2*`` and ``flex2*`` potentials.
+
+.. mdp:: rot-fit-method0
+
+   (rmsd)
+   Fitting method when determining the actual angle of a rotation group
+   (can be one of ``rmsd``, ``norm``, or ``potential``).
+
+.. mdp:: rot-potfit-nsteps0
+
+   (21)
+   For fit type ``potential``, the number of angular positions around the reference angle for which the
+   rotation potential is evaluated.
+
+.. mdp:: rot-potfit-step0
+
+   (0.25)
+   For fit type ``potential``, the distance in degrees between two angular positions.
+
+.. mdp:: rot-nstrout
+
+   (100)
+   Output frequency (in steps) for the angle of the rotation group, as well as for the torque
+   and the rotation potential energy.
+
+.. mdp:: rot-nstsout
+
+   (1000)
+   Output frequency for per-slab data of the flexible axis potentials, i.e. angles, torques and slab centers.
 
 
 NMR refinement
